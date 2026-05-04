@@ -40,12 +40,21 @@ def _split_sql(sql: str) -> list[str]:
     return statements
 
 
+def _is_db_selection_stmt(stmt: str) -> bool:
+    head = stmt.lstrip().upper()
+    return head.startswith("CREATE DATABASE") or head.startswith("USE ")
+
+
 @pytest.fixture(scope="session")
 def fresh_db():
     """Drop, recreate, and load schema. Yields nothing — env vars carry config."""
     conn = _server_conn()
     cur = conn.cursor()
     cur.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
+    cur.execute(
+        f"CREATE DATABASE {DB_NAME} "
+        "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+    )
     cur.execute("SET sql_mode = 'NO_ENGINE_SUBSTITUTION'")
     cur.close()
     conn.close()
@@ -53,7 +62,10 @@ def fresh_db():
     schema_sql = SCHEMA_FILE.read_text()
     conn = _server_conn()
     cur = conn.cursor()
+    cur.execute(f"USE {DB_NAME}")
     for stmt in _split_sql(schema_sql):
+        if _is_db_selection_stmt(stmt):
+            continue
         cur.execute(stmt)
     cur.close()
     conn.close()
