@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import mariadb
@@ -11,6 +12,11 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_FILE = REPO_ROOT / "schema" / "001_initial.sql"
 DB_NAME = os.environ.get("DB_NAME", "dbmaria_project")
+
+if not re.fullmatch(r"[A-Za-z0-9_]+", DB_NAME):
+    raise RuntimeError(
+        f"Invalid DB_NAME {DB_NAME!r}: must match ^[A-Za-z0-9_]+$"
+    )
 
 
 def _server_conn():
@@ -50,9 +56,9 @@ def fresh_db():
     """Drop, recreate, and load schema. Yields nothing — env vars carry config."""
     conn = _server_conn()
     cur = conn.cursor()
-    cur.execute(f"DROP DATABASE IF EXISTS {DB_NAME}")
+    cur.execute(f"DROP DATABASE IF EXISTS `{DB_NAME}`")
     cur.execute(
-        f"CREATE DATABASE {DB_NAME} "
+        f"CREATE DATABASE `{DB_NAME}` "
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
     )
     cur.execute("SET sql_mode = 'NO_ENGINE_SUBSTITUTION'")
@@ -62,7 +68,7 @@ def fresh_db():
     schema_sql = SCHEMA_FILE.read_text()
     conn = _server_conn()
     cur = conn.cursor()
-    cur.execute(f"USE {DB_NAME}")
+    cur.execute(f"USE `{DB_NAME}`")
     for stmt in _split_sql(schema_sql):
         if _is_db_selection_stmt(stmt):
             continue
