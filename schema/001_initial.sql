@@ -210,14 +210,22 @@ CREATE TABLE visit_metadata (
 
 -- =========================================================
 -- Table 6: sample_metadata
--- Flexible metadata attached to a sample
--- e.g. well position, plate barcode, dilution factor
+-- Flexible typed metadata attached to a sample
+-- e.g. well position (text), plate barcode (text),
+--      dilution factor (numeric), passed_qc (bool)
 -- =========================================================
 CREATE TABLE sample_metadata (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     sample_id BIGINT UNSIGNED NOT NULL,
     key_name VARCHAR(100) NOT NULL,
-    value TEXT NULL,
+
+    value_int INTEGER NULL,
+    value_numeric DECIMAL(20,6) NULL,
+    value_bool BOOLEAN NULL,
+    value_text TEXT NULL,
+
+    value_type ENUM('int', 'numeric', 'bool', 'text') NOT NULL,
+
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
@@ -228,9 +236,43 @@ CREATE TABLE sample_metadata (
         ON DELETE CASCADE
         ON UPDATE CASCADE,
 
+    CONSTRAINT chk_sample_metadata_value_type
+        CHECK (
+            (value_type = 'int'
+             AND value_int IS NOT NULL
+             AND value_numeric IS NULL
+             AND value_bool IS NULL
+             AND value_text IS NULL)
+
+            OR
+
+            (value_type = 'numeric'
+             AND value_int IS NULL
+             AND value_numeric IS NOT NULL
+             AND value_bool IS NULL
+             AND value_text IS NULL)
+
+            OR
+
+            (value_type = 'bool'
+             AND value_int IS NULL
+             AND value_numeric IS NULL
+             AND value_bool IS NOT NULL
+             AND value_text IS NULL)
+
+            OR
+
+            (value_type = 'text'
+             AND value_int IS NULL
+             AND value_numeric IS NULL
+             AND value_bool IS NULL
+             AND value_text IS NOT NULL)
+        ),
+
     UNIQUE KEY uq_sample_metadata_sample_key (sample_id, key_name),
     KEY idx_sample_metadata_sample_id (sample_id),
-    KEY idx_sample_metadata_key_name (key_name)
+    KEY idx_sample_metadata_key_name (key_name),
+    KEY idx_sample_metadata_value_type (value_type)
 ) ENGINE=InnoDB;
 
 
