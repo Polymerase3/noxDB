@@ -141,9 +141,10 @@ def _setup_audit_logger() -> None:
     log_path = Path(
         os.environ.get("LABDB_AUDIT_LOG", str(Path.home() / ".labdb" / "audit.log"))
     ).expanduser()
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-    handler = logging.FileHandler(log_path, encoding="utf-8")
+    fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    handler = logging.StreamHandler(os.fdopen(fd, "a", encoding="utf-8"))
     handler.setFormatter(
         logging.Formatter("%(asctime)s | %(user)s | %(message)s")
     )
@@ -164,11 +165,18 @@ def _log_if_write(query: str, params: Any, rowcount: int) -> None:
     snippet = query.strip().replace("\n", " ")
     if len(snippet) > 200:
         snippet = snippet[:200] + "..."
-    _logger.info(
-        "%s | params=%r | rows=%d",
-        snippet, params, rowcount,
-        extra={"user": _USER},
-    )
+    if os.environ.get("LABDB_AUDIT_LOG_PARAMS") == "1":
+        _logger.info(
+            "%s | params=%r | rows=%d",
+            snippet, params, rowcount,
+            extra={"user": _USER},
+        )
+    else:
+        _logger.info(
+            "%s | rows=%d",
+            snippet, rowcount,
+            extra={"user": _USER},
+        )
 
 
 # --------------------------------------------------------------------------- #
