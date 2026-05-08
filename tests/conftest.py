@@ -1,4 +1,4 @@
-"""Test fixtures: reset the database and load the schema once per session."""
+"""Test fixtures: reset the database, load the schema, configure the pool."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from pathlib import Path
 
 import mariadb
 import pytest
+
+from dbmaria_utils import close_pool, get_connection, init_pool
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_FILE = REPO_ROOT / "schema" / "001_initial.sql"
@@ -20,6 +22,12 @@ if not re.fullmatch(r"[A-Za-z0-9_]+", DB_NAME):
 
 
 def _server_conn():
+    """Direct admin connection used to bootstrap the database itself.
+
+    This bypasses the pool intentionally: the pool is bound to a specific
+    database, but DROP/CREATE DATABASE is server-level work that runs before
+    the target database exists.
+    """
     return mariadb.connect(
         host=os.environ.get("DB_HOST", "127.0.0.1"),
         port=int(os.environ.get("DB_PORT", "3306")),
@@ -78,15 +86,32 @@ def fresh_db():
     yield
 
 
-@pytest.fixture
-def db_conn(fresh_db):
-    conn = mariadb.connect(
+@pytest.fixture(scope="session")
+def _init_pool(fresh_db, tmp_path_factory):
+    """Configure the connection pool against the freshly created test DB.
+
+    Yields the audit log path so tests can verify audit entries on disk.
+    Credentials come from env vars (DB_HOST/PORT/USER/PASSWORD) so CI does
+    not need a ~/.my.cnf file.
+    """
+    audit_path = tmp_path_factory.mktemp("audit") / "audit.log"
+    os.environ["LABDB_AUDIT_LOG"] = str(audit_path)
+
+    init_pool(
+        config_path=None,
         host=os.environ.get("DB_HOST", "127.0.0.1"),
         port=int(os.environ.get("DB_PORT", "3306")),
         user=os.environ.get("DB_USER", "root"),
         password=os.environ.get("DB_PASSWORD", ""),
         database=DB_NAME,
-        autocommit=False,
     )
-    yield conn
-    conn.close()
+    yield audit_path
+    close_pool()
+    os.environ.pop("LABDB_AUDIT_LOG", None)
+
+
+@pytest.fixture
+def db_conn(_init_pool):
+    """A pooled connection. Commits on success, rolls back on exception."""
+    with get_connection() as conn:
+        yield conn

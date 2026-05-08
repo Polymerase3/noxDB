@@ -17,18 +17,7 @@ from __future__ import annotations
 import os
 import sys
 
-import mariadb
-
-
-def connect():
-    return mariadb.connect(
-        host=os.environ.get("DB_HOST", "127.0.0.1"),
-        port=int(os.environ.get("DB_PORT", "3306")),
-        user=os.environ.get("DB_USER", "root"),
-        password=os.environ.get("DB_PASSWORD", ""),
-        database=os.environ.get("DB_NAME", "dbmaria_project"),
-        autocommit=False,
-    )
+from dbmaria_utils import close_pool, get_connection, init_pool
 
 
 def insert_project(cur) -> int:
@@ -211,18 +200,23 @@ def load(conn) -> None:
         "archive",
     )
 
-    conn.commit()
-
 
 def main() -> int:
-    conn = connect()
+    # Configure the pool from env vars so this script works in CI without
+    # a ~/.my.cnf file. The context manager handles commit/rollback.
+    init_pool(
+        config_path=None,
+        host=os.environ.get("DB_HOST", "127.0.0.1"),
+        port=int(os.environ.get("DB_PORT", "3306")),
+        user=os.environ.get("DB_USER", "root"),
+        password=os.environ.get("DB_PASSWORD", ""),
+        database=os.environ.get("DB_NAME", "dbmaria_project"),
+    )
     try:
-        load(conn)
-    except Exception:
-        conn.rollback()
-        raise
+        with get_connection() as conn:
+            load(conn)
     finally:
-        conn.close()
+        close_pool()
     return 0
 
 
