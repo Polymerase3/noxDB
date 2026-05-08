@@ -12,6 +12,22 @@ individual fields can be overridden via ``init_pool(...)`` keyword arguments.
 The database name additionally honors the ``LABDB_DATABASE`` env variable
 (env var loses to an explicit ``init_pool(database=...)`` override).
 
+SSH tunneling
+-------------
+The production database lives on a Galera cluster inside the LiSC network and
+is only reachable by SSH-ing through the project VM at
+``ccr-lab.lisc.univie.ac.at``. To connect from outside LiSC, supply SSH
+parameters and ``init_pool()`` will open a local-port-forwarding tunnel before
+creating the pool. The DB ``host``/``port`` you configure are interpreted as
+the *remote* DB endpoint (i.e. the Galera cluster as seen from the VM).
+
+SSH parameters (kwargs > ``LABDB_SSH_*`` env vars > ``[labdb-ssh]`` INI section):
+    ssh_host, ssh_port (default 22), ssh_user, ssh_password, ssh_pkey,
+    ssh_pkey_password.
+
+If ``ssh_host`` is unset the tunnel is skipped and the driver connects
+directly to ``host:port`` (useful when running on the VM itself).
+
 Write statements (INSERT/UPDATE/DELETE/REPLACE) issued via ``execute()`` or via
 the cursor yielded by ``transaction()`` are appended to an audit log at
 ``~/.labdb/audit.log`` (override with ``LABDB_AUDIT_LOG``).
@@ -34,10 +50,12 @@ import mariadb
 DEFAULT_POOL_SIZE = 10
 DEFAULT_CONFIG_PATH = "~/.my.cnf"
 DEFAULT_SECTION = "labdb"
+DEFAULT_SSH_SECTION = "labdb-ssh"
 DEFAULT_DATABASE = "dbmaria_project"
 
 _pool: mariadb.ConnectionPool | None = None
 _pool_counter = 0  # appended to pool_name so re-inits do not collide
+_tunnel: Any = None  # SSHTunnelForwarder | None; Any avoids importing sshtunnel at module load
 
 _logger = logging.getLogger("dbmaria_utils.audit")
 _logger.setLevel(logging.INFO)
@@ -131,6 +149,113 @@ def _resolve_credentials(
 
 
 # --------------------------------------------------------------------------- #
+# SSH tunnel
+# --------------------------------------------------------------------------- #
+
+_SSH_ENV_MAP = {
+    "ssh_host": "LABDB_SSH_HOST",
+    "ssh_port": "LABDB_SSH_PORT",
+    "ssh_user": "LABDB_SSH_USER",
+    "ssh_password": "LABDB_SSH_PASSWORD",
+    "ssh_pkey": "LABDB_SSH_PKEY",
+    "ssh_pkey_password": "LABDB_SSH_PKEY_PASSWORD",
+}
+
+
+def _load_ssh_credentials(config_path: Path, section: str) -> dict[str, Any]:
+    """Read SSH credentials from an INI section. Returns {} if file or section absent."""
+    if not config_path.exists():
+        return {}
+    cfg = configparser.ConfigParser()
+    cfg.read(config_path)
+    if section not in cfg:
+        return {}
+
+    sect = cfg[section]
+    creds: dict[str, Any] = {}
+    if "ssh_host" in sect:
+        creds["ssh_host"] = sect["ssh_host"]
+    if "ssh_port" in sect:
+        creds["ssh_port"] = int(sect["ssh_port"])
+    for key in ("ssh_user", "ssh_password", "ssh_pkey", "ssh_pkey_password"):
+        if key in sect:
+            creds[key] = sect[key]
+    return creds
+
+
+def _resolve_ssh_credentials(
+    config_path: str | Path | None,
+    section: str,
+    overrides: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge INI SSH section with env vars and explicit overrides.
+
+    Resolution order (highest priority first):
+      1. Explicit overrides passed to init_pool()
+      2. LABDB_SSH_* env vars
+      3. Values from the [labdb-ssh] INI section (if config_path is not None)
+    """
+    if config_path is None:
+        creds: dict[str, Any] = {}
+    else:
+        creds = _load_ssh_credentials(Path(config_path).expanduser(), section)
+
+    for key, env_name in _SSH_ENV_MAP.items():
+        env_val = os.environ.get(env_name)
+        if env_val:
+            creds[key] = int(env_val) if key == "ssh_port" else env_val
+
+    for key, value in overrides.items():
+        if value is not None:
+            creds[key] = value
+
+    return creds
+
+
+def _open_tunnel(ssh_creds: dict[str, Any], remote_host: str, remote_port: int) -> Any:
+    """Start an SSH tunnel forwarding 127.0.0.1:<random> -> remote_host:remote_port."""
+    try:
+        from sshtunnel import SSHTunnelForwarder
+    except ImportError as exc:
+        raise RuntimeError(
+            "sshtunnel is required for SSH-tunneled connections. "
+            "Reinstall the package or run: pip install sshtunnel"
+        ) from exc
+
+    if not ssh_creds.get("ssh_user"):
+        raise RuntimeError(
+            "Cannot open SSH tunnel: 'ssh_user' is missing. "
+            "Provide it via init_pool(ssh_user=...), LABDB_SSH_USER, or the [labdb-ssh] config section."
+        )
+
+    kwargs: dict[str, Any] = {
+        "ssh_username": ssh_creds["ssh_user"],
+        "remote_bind_address": (remote_host, int(remote_port)),
+        "local_bind_address": ("127.0.0.1", 0),
+    }
+    # Auth: pass whichever credentials the user gave; paramiko prefers key over
+    # password when both are present, and falls back to the agent / default
+    # ~/.ssh/id_* keys when neither is set (look_for_keys is on by default).
+    if ssh_creds.get("ssh_pkey"):
+        kwargs["ssh_pkey"] = str(Path(ssh_creds["ssh_pkey"]).expanduser())
+        if ssh_creds.get("ssh_pkey_password"):
+            kwargs["ssh_private_key_password"] = ssh_creds["ssh_pkey_password"]
+    if ssh_creds.get("ssh_password"):
+        kwargs["ssh_password"] = ssh_creds["ssh_password"]
+
+    ssh_address = (ssh_creds["ssh_host"], int(ssh_creds.get("ssh_port", 22)))
+
+    try:
+        tunnel = SSHTunnelForwarder(ssh_address, **kwargs)
+        tunnel.start()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to open SSH tunnel to {ssh_address[0]}:{ssh_address[1]}: {exc}"
+        ) from exc
+    return tunnel
+
+
+# --------------------------------------------------------------------------- #
 # audit logger
 # --------------------------------------------------------------------------- #
 
@@ -193,14 +318,25 @@ def init_pool(
     user: str | None = None,
     password: str | None = None,
     database: str | None = None,
+    ssh_host: str | None = None,
+    ssh_port: int | None = None,
+    ssh_user: str | None = None,
+    ssh_password: str | None = None,
+    ssh_pkey: str | None = None,
+    ssh_pkey_password: str | None = None,
 ) -> None:
     """Create the connection pool.
 
     Raises RuntimeError if the pool is already initialized; call close_pool()
     first to reconfigure. Pass config_path=None to skip the INI file entirely
     and rely solely on the keyword overrides (useful for CI / tests).
+
+    When ssh_host resolves to a non-empty value (via kwarg, LABDB_SSH_HOST, or
+    the [labdb-ssh] config section), an SSH tunnel is opened to that host and
+    the pool connects through it; the configured DB host:port is the tunnel's
+    remote bind target.
     """
-    global _pool, _pool_counter
+    global _pool, _pool_counter, _tunnel
     if _pool is not None:
         raise RuntimeError(
             "pool already initialized; call close_pool() before re-initializing"
@@ -218,26 +354,60 @@ def init_pool(
         },
     )
 
-    _pool_counter += 1
-    pool_name = f"dbmaria_utils_{os.getpid()}_{_pool_counter}"
-    _pool = mariadb.ConnectionPool(
-        pool_name=pool_name,
-        pool_size=pool_size,
-        autocommit=False,
-        **creds,
+    ssh_creds = _resolve_ssh_credentials(
+        config_path,
+        DEFAULT_SSH_SECTION,
+        {
+            "ssh_host": ssh_host,
+            "ssh_port": ssh_port,
+            "ssh_user": ssh_user,
+            "ssh_password": ssh_password,
+            "ssh_pkey": ssh_pkey,
+            "ssh_pkey_password": ssh_pkey_password,
+        },
     )
+
+    if ssh_creds.get("ssh_host"):
+        _tunnel = _open_tunnel(ssh_creds, creds["host"], creds["port"])
+        local_host, local_port = _tunnel.local_bind_address
+        creds["host"] = local_host
+        creds["port"] = int(local_port)
+
+    try:
+        _pool_counter += 1
+        pool_name = f"dbmaria_utils_{os.getpid()}_{_pool_counter}"
+        _pool = mariadb.ConnectionPool(
+            pool_name=pool_name,
+            pool_size=pool_size,
+            autocommit=False,
+            **creds,
+        )
+    except Exception:
+        if _tunnel is not None:
+            try:
+                _tunnel.stop()
+            except Exception:
+                pass
+            _tunnel = None
+        raise
     _setup_audit_logger()
 
 
 def close_pool() -> None:
-    """Close the pool and release the audit log handler."""
-    global _pool
+    """Close the pool, tear down any SSH tunnel, and release the audit log handler."""
+    global _pool, _tunnel
     if _pool is not None:
         try:
             _pool.close()
         except Exception:
             pass
         _pool = None
+    if _tunnel is not None:
+        try:
+            _tunnel.stop()
+        except Exception:
+            pass
+        _tunnel = None
     _teardown_audit_logger()
 
 
