@@ -45,6 +45,36 @@ pip install -e .
 
 Credentials go in `~/.my.cnf`. To run tests, see [`docs/testing.md`](docs/testing.md).
 
+## Connecting through the LiSC SSH jump host
+
+The Galera cluster is on the LiSC internal network and is only reachable from
+hosts inside LiSC. From outside, connect through the project VM
+(`ccr-lab.lisc.univie.ac.at`) — `init_pool()` will open an SSH tunnel for you
+when an SSH host is configured.
+
+Add a `[labdb-ssh]` section alongside `[labdb]` in `~/.my.cnf`:
+
+```ini
+[labdb]
+host=<galera-internal-hostname>   # the Galera endpoint as resolvable from ccr-lab
+port=3306
+user=<db-user>
+password=<db-password>
+database=dbmaria_project
+
+[labdb-ssh]
+ssh_host=ccr-lab.lisc.univie.ac.at
+ssh_user=<lisc-username>
+ssh_pkey=~/.ssh/id_ed25519        # public-key auth (preferred)
+# ssh_password=<lisc-password>    # alternative if you don't have a key uploaded
+```
+
+Auth: `ssh_pkey` is tried first; otherwise paramiko falls back to your
+ssh-agent / default `~/.ssh/id_*` keys, then to `ssh_password` if set. Any
+field can also be supplied via `LABDB_SSH_*` env vars or as a kwarg to
+`init_pool()`. When `ssh_host` is unset (e.g. when running on `ccr-lab`
+itself), the library connects directly to the configured DB host.
+
 ## Access
 
 Three role tiers, all restricted to hosts in `lisc.%`:
