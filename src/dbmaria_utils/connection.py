@@ -211,6 +211,7 @@ def init_pool(
     _pool = mariadb.ConnectionPool(
         pool_name=pool_name,
         pool_size=pool_size,
+        autocommit=False,
         **creds,
     )
     _setup_audit_logger()
@@ -244,6 +245,10 @@ def _get_pool() -> mariadb.ConnectionPool:
 def get_connection() -> Iterator[mariadb.Connection]:
     """Yield a pooled connection. Commits on success, rolls back on exception."""
     conn = _get_pool().get_connection()
+    # Pool reset between uses can revert autocommit to the server default
+    # (True on MariaDB), which would silently break our rollback path.
+    # Force it explicitly on every checkout.
+    conn.autocommit = False
     try:
         yield conn
         conn.commit()
