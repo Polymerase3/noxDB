@@ -121,7 +121,13 @@ def _eav_split(value):
 
 def load(conn) -> None:
     cur = conn.cursor()
+    try:
+        _load_with_cursor(cur)
+    finally:
+        cur.close()
 
+
+def _load_with_cursor(cur) -> None:
     project_id = insert_project(cur)
 
     # Subject 1 — cross-sectional, single visit
