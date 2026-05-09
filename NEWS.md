@@ -42,6 +42,11 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
     `scratch` / `external` overrides are still allowed.
 
 ### Changed
+- CI now runs `pytest --cov` against `src/dbmaria_utils` (branch
+  coverage), prints a missing-lines report in the workflow log, and
+  uploads `coverage.xml` as a build artifact. `pytest-cov` is a new
+  optional `test` dependency; coverage settings live under
+  `[tool.coverage.*]` in `pyproject.toml`.
 - `_LoggingCursor` and `execute()` pass `params` through unchanged when
   the caller provides an empty container; only `params is None` is
   substituted with `()`.
