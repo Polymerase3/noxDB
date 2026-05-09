@@ -454,7 +454,7 @@ class _LoggingCursor:
         self._cursor = cursor
 
     def execute(self, query: str, params: Any = None) -> Any:
-        result = self._cursor.execute(query, params or ())
+        result = self._cursor.execute(query, params if params is not None else ())
         _log_if_write(query, params, self._cursor.rowcount)
         return result
 
@@ -508,7 +508,7 @@ def execute(query: str, params: Any = None) -> list[dict[str, Any]]:
     with get_connection() as conn:
         cur = conn.cursor()
         try:
-            cur.execute(query, params or ())
+            cur.execute(query, params if params is not None else ())
             _log_if_write(query, params, cur.rowcount)
             if cur.description is None:
                 return []
