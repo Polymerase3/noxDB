@@ -31,6 +31,8 @@ import os
 import re
 from typing import Any
 
+import mariadb
+
 _ARCHIVE_TYPES = frozenset(
     {"fastq_r1", "fastq_r2", "fastq_single", "bam", "counts"}
 )
@@ -288,12 +290,18 @@ def get_or_register(
     existing = get_by_path(cur, file_path)
     if existing is not None:
         return int(existing["file_id"]), False
-    new_id = register(
-        cur, sample_id, file_path, file_type,
-        compute_md5=compute_md5,
-        checksum_md5=checksum_md5,
-        storage_tier=storage_tier,
-    )
+    try:
+        new_id = register(
+            cur, sample_id, file_path, file_type,
+            compute_md5=compute_md5,
+            checksum_md5=checksum_md5,
+            storage_tier=storage_tier,
+        )
+    except mariadb.IntegrityError:
+        existing = get_by_path(cur, file_path)
+        if existing is None:
+            raise
+        return int(existing["file_id"]), False
     return new_id, True
 
 
