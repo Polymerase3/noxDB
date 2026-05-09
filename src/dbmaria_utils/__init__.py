@@ -1,6 +1,6 @@
 """Python tooling for dbmaria_project."""
 
-from dbmaria_utils import projects, subjects
+from dbmaria_utils import projects, subjects, visits
 from dbmaria_utils.connection import (
     close_pool,
     execute,
@@ -17,4 +17,5 @@ __all__ = [
     "projects",
     "subjects",
     "transaction",
+    "visits",
 ]
