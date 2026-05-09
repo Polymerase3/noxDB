@@ -370,10 +370,20 @@ def update(
     """
     if checksum_md5 is not None:
         _validate_md5(checksum_md5)
-    if storage_tier is not None and storage_tier not in _ALL_TIERS:
-        raise ValueError(
-            f"storage_tier must be one of {sorted(_ALL_TIERS)}, got {storage_tier!r}"
+    if storage_tier is not None:
+        if storage_tier not in _ALL_TIERS:
+            raise ValueError(
+                f"storage_tier must be one of {sorted(_ALL_TIERS)}, got {storage_tier!r}"
+            )
+        # Enforce the same file_type -> tier invariant as register():
+        # callers may move a file to scratch/external, but cannot flip
+        # archive <-> work for a given file_type.
+        cur.execute(
+            "SELECT file_type FROM sample_files WHERE file_id = ?", (file_id,)
         )
+        row = cur.fetchone()
+        if row is not None:
+            _resolve_tier(row[0], storage_tier)
     fields = {
         "file_size_bytes": file_size_bytes,
         "checksum_md5": checksum_md5,
