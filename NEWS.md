@@ -10,6 +10,33 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-11
+
+### Fixed
+- `get_connection()` now forces server-side `SET autocommit=0` on every
+  pool checkout instead of relying on the Python-side `conn.autocommit`
+  setter. The setter elides the `SET` command when its cached flag
+  already matches, so after a pool reset the server could be left in
+  autocommit=1 while Python thought it was 0. Inserts then auto-committed
+  and `rollback()` was a silent no-op. Triggered intermittently for
+  later-session tests; surfaced by a regression test against the
+  `subjects` table.
+
+### Added
+- `workflows` module bundling atomic, idempotent high-level operations
+  on top of the per-table CRUD helpers:
+  - `register_subject_with_visit` — `subjects.get_or_create` +
+    `visits.get_or_create` + optional `visit_metadata` upsert, all in
+    one transaction.
+  - `register_sample_with_files` — `samples.get_or_create` + optional
+    `sample_metadata` upsert + per-file `files.get_or_register`, all in
+    one transaction. A disk-validation error on any file rolls back the
+    sample and its metadata too.
+- Both workflows take an optional `cur=None`; when None they open their
+  own `transaction()`, otherwise they piggyback on the caller's cursor
+  via `contextlib.nullcontext`, so they compose cleanly inside a larger
+  atomic block.
+
 ## [0.2.1] - 2026-05-11
 
 ### Added

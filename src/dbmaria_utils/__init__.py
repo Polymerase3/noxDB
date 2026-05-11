@@ -8,6 +8,7 @@ from dbmaria_utils import (
     samples,
     subjects,
     visits,
+    workflows,
 )
 from dbmaria_utils.connection import (
     close_pool,
@@ -30,4 +31,5 @@ __all__ = [
     "subjects",
     "transaction",
     "visits",
+    "workflows",
 ]
