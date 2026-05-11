@@ -528,36 +528,58 @@ def integrity_check(cur, project_id: int) -> dict[str, Any]:
         "WHERE s.project_id = ?",
         (project_id,),
     )
-    archive_root = os.path.realpath(_archive_root())
-    work_root = os.path.realpath(_work_root())
+    # Build a list of acceptable prefixes per tier. Both the raw (as
+    # configured) root and the realpath-resolved root are accepted, because
+    # either side may be a symlink: DB rows are stored verbatim from the
+    # caller (often using the raw mount path), while operator-facing tools
+    # may resolve roots. Accepting both shapes prevents false positives in
+    # either direction.
+    archive_root_raw = os.path.normpath(_archive_root())
+    work_root_raw = os.path.normpath(_work_root())
+    archive_root_real = os.path.realpath(_archive_root())
+    work_root_real = os.path.realpath(_work_root())
+    archive_roots = sorted({archive_root_raw, archive_root_real})
+    work_roots = sorted({work_root_raw, work_root_real})
+
+    def _under_any(path: str, roots: list[str]) -> bool:
+        """True iff *path* sits at-or-below any of *roots* by commonpath.
+
+        ``commonpath`` is used instead of string ``startswith`` so a sibling
+        with the same string prefix (e.g. ``/lisc/archive_old`` vs
+        ``/lisc/archive``) is NOT classified as inside the root.
+        """
+        norm = os.path.normpath(path)
+        for root in roots:
+            try:
+                if os.path.commonpath([norm, root]) == root:
+                    return True
+            except ValueError:
+                # Mixed drive letters on Windows or non-absolute path.
+                continue
+        return False
+
     for fid, ftype, fpath, tier in cur.fetchall():
         if ftype not in _FILE_TYPES:
             report["unknown_file_types"].append(
                 {"file_id": int(fid), "file_type": ftype, "file_path": fpath}
             )
             continue
-        # Compare against the *string* prefix of the configured root rather
-        # than calling realpath on fpath (the file may not exist locally,
-        # e.g. when running this check from a laptop without LiSC mount).
-        # Normalize separators so checks behave consistently regardless of
-        # whether the row was written from a POSIX or Windows host. The path
-        # itself is not resolved via realpath because the file may not exist
-        # on the current host (laptop without LiSC mount).
-        norm_path = os.path.normpath(fpath)
-        archive_prefix = archive_root + os.sep
-        work_prefix = work_root + os.sep
-        under_archive = norm_path.startswith(archive_prefix)
-        under_work = norm_path.startswith(work_prefix)
+        # Note: we deliberately do NOT realpath *fpath* itself — the file may
+        # not exist on the current host (e.g. running this check from a
+        # laptop without LiSC mounted), and realpath of a non-existent path
+        # returns the path unchanged on POSIX, so resolving it adds no value.
+        under_archive = _under_any(fpath, archive_roots)
+        under_work = _under_any(fpath, work_roots)
 
         if tier == "archive" and not under_archive:
             report["files_outside_tier_root"].append(
                 {"file_id": int(fid), "file_path": fpath, "tier": tier,
-                 "expected_root": archive_root}
+                 "expected_roots": archive_roots}
             )
         elif tier == "work" and not under_work:
             report["files_outside_tier_root"].append(
                 {"file_id": int(fid), "file_path": fpath, "tier": tier,
-                 "expected_root": work_root}
+                 "expected_roots": work_roots}
             )
         elif tier in {"archive", "work"}:
             # Cross-check: archive file_type stored as work, or vice versa.
@@ -575,7 +597,7 @@ def integrity_check(cur, project_id: int) -> dict[str, Any]:
             if not under_archive and not under_work:
                 report["files_outside_tier_root"].append(
                     {"file_id": int(fid), "file_path": fpath, "tier": tier,
-                     "checked_roots": [archive_root, work_root],
+                     "checked_roots": archive_roots + work_roots,
                      "reason": "scratch/external path is outside both LABDB roots"}
                 )
     return report
