@@ -185,6 +185,38 @@ def test_integrity_check_flags_archive_without_md5(populated_project):
     assert paths == ["/lisc/archive/qproj/SAMP_A3.bam"]
 
 
+def test_integrity_check_flags_scratch_outside_both_roots(populated_project):
+    """scratch/external tiers have no enforced root, but a path that lives
+    outside *both* LABDB roots is surfaced for audit."""
+    pid = populated_project["project_id"]
+    with transaction() as cur:
+        cur.execute(
+            "UPDATE sample_files SET file_path = ?, storage_tier = 'scratch' "
+            "WHERE file_path = ?",
+            ("/tmp/random/scratch.tsv", "/lisc/work/qproj/SAMP_B1.beer.tsv"),
+        )
+        report = queries.integrity_check(cur, pid)
+    scratch_rows = [
+        r for r in report["files_outside_tier_root"] if r.get("tier") == "scratch"
+    ]
+    assert len(scratch_rows) == 1
+    assert scratch_rows[0]["file_path"] == "/tmp/random/scratch.tsv"
+    assert "checked_roots" in scratch_rows[0]
+
+
+def test_integrity_check_does_not_flag_scratch_under_root(populated_project):
+    """A scratch path that happens to land under a LABDB root is intentional
+    (the row was opted into the escape hatch) and is NOT flagged."""
+    pid = populated_project["project_id"]
+    with transaction() as cur:
+        cur.execute(
+            "UPDATE sample_files SET storage_tier = 'scratch' WHERE file_path = ?",
+            ("/lisc/work/qproj/SAMP_B1.beer.tsv",),
+        )
+        report = queries.integrity_check(cur, pid)
+    assert all(r.get("tier") != "scratch" for r in report["files_outside_tier_root"])
+
+
 def test_integrity_check_flags_path_outside_root(populated_project):
     pid = populated_project["project_id"]
     with transaction() as cur:

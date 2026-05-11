@@ -539,12 +539,22 @@ def integrity_check(cur, project_id: int) -> dict[str, Any]:
         # Compare against the *string* prefix of the configured root rather
         # than calling realpath on fpath (the file may not exist locally,
         # e.g. when running this check from a laptop without LiSC mount).
-        if tier == "archive" and not fpath.startswith(archive_root + os.sep):
+        # Normalize separators so checks behave consistently regardless of
+        # whether the row was written from a POSIX or Windows host. The path
+        # itself is not resolved via realpath because the file may not exist
+        # on the current host (laptop without LiSC mount).
+        norm_path = os.path.normpath(fpath)
+        archive_prefix = archive_root + os.sep
+        work_prefix = work_root + os.sep
+        under_archive = norm_path.startswith(archive_prefix)
+        under_work = norm_path.startswith(work_prefix)
+
+        if tier == "archive" and not under_archive:
             report["files_outside_tier_root"].append(
                 {"file_id": int(fid), "file_path": fpath, "tier": tier,
                  "expected_root": archive_root}
             )
-        elif tier == "work" and not fpath.startswith(work_root + os.sep):
+        elif tier == "work" and not under_work:
             report["files_outside_tier_root"].append(
                 {"file_id": int(fid), "file_path": fpath, "tier": tier,
                  "expected_root": work_root}
@@ -556,5 +566,16 @@ def integrity_check(cur, project_id: int) -> dict[str, Any]:
                 report["files_outside_tier_root"].append(
                     {"file_id": int(fid), "file_path": fpath, "tier": tier,
                      "expected_tier": expected_tier}
+                )
+        elif tier in {"scratch", "external"}:
+            # scratch/external have no enforced root. We still surface rows
+            # whose path falls outside both LABDB roots so operators get an
+            # audit-friendly list of files registered off the managed
+            # storage entirely — useful when reconciling backups / DR.
+            if not under_archive and not under_work:
+                report["files_outside_tier_root"].append(
+                    {"file_id": int(fid), "file_path": fpath, "tier": tier,
+                     "checked_roots": [archive_root, work_root],
+                     "reason": "scratch/external path is outside both LABDB roots"}
                 )
     return report
