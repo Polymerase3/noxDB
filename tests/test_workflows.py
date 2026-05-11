@@ -111,6 +111,42 @@ def test_register_subject_with_visit_idempotent_on_rerun(project):
     assert float(meta["bmi"]) == 22.5  # metadata.set_visit upserts
 
 
+def test_diagnostic_crud_rollback_on_subjects(project):
+    """Same shape as test_diagnostic_raw_rollback_on_subjects but routed
+    through subjects.create() (the CRUD wrapper)."""
+    with pytest.raises(RuntimeError, match="diag boom 2"):
+        with transaction() as cur:
+            subjects.create(cur, project, "DIAG_CRUD", "F")
+            raise RuntimeError("diag boom 2")
+    rows = execute(
+        "SELECT COUNT(*) AS n FROM subjects "
+        "WHERE project_id = ? AND subject_code = ?",
+        (project, "DIAG_CRUD"),
+    )
+    assert rows[0]["n"] == 0
+
+
+def test_diagnostic_raw_rollback_on_subjects(project):
+    """Minimal repro: does rollback() actually undo a raw INSERT into the
+    subjects table? Mirrors test_transaction_rolls_back_atomically but
+    targets `subjects` (FK + AUTO_INCREMENT) instead of `_test_kv`.
+    """
+    with pytest.raises(RuntimeError, match="diag boom"):
+        with transaction() as cur:
+            cur.execute(
+                "INSERT INTO subjects (project_id, subject_code, sex) "
+                "VALUES (?, ?, ?)",
+                (project, "DIAG_S", "F"),
+            )
+            raise RuntimeError("diag boom")
+    rows = execute(
+        "SELECT COUNT(*) AS n FROM subjects "
+        "WHERE project_id = ? AND subject_code = ?",
+        (project, "DIAG_S"),
+    )
+    assert rows[0]["n"] == 0
+
+
 def test_register_subject_with_visit_atomic_rollback_on_bad_metadata(project):
     """A bad metadata value (None) must roll back the subject+visit too."""
     with pytest.raises(ValueError):
