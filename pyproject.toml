@@ -26,7 +26,7 @@ test = [
 analysis = [
     "pandas>=2.0",
     "openpyxl>=3.1",
-    "paramiko>=3.0",
+    "paramiko>=3.0,<4.0",
 ]
 docs = [
     "mkdocs-material>=9.5",
