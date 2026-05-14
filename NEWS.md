@@ -10,6 +10,36 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-05-14
+
+### Added
+- `scripts/prepare_migration.py` and `scripts/bulk_import.py`: two CLI
+  scripts for bulk-loading legacy data. `prepare_migration.py` transforms
+  a raw export directory into the canonical import folder layout expected
+  by `import_project_from_dir`; `bulk_import.py` wraps it to drive
+  multiple projects in one run.
+
+### Changed
+- `counts` files may now be stored in the `work` tier as well as
+  `archive`. The hard `archive ↔ work` flip rejection in
+  `files._resolve_tier` is removed; the `scratch`/`external` escape
+  hatches are unchanged.
+- `files.register` / `files.get_or_register` gain a `skip_disk_check`
+  parameter (forwarded from `_inspect_file`): when `True`, path-prefix
+  and on-disk stat/MD5 checks are skipped and `file_size_bytes` is stored
+  as `NULL`. Useful when registering files that are not yet mounted on
+  the current host.
+
+### Fixed
+- `paramiko` pinned to `<4.0` in the `analysis` optional-dependency
+  group. `paramiko` 4+ removed `DSSKey`; `sshtunnel` 0.4.0 still
+  references it, causing an `AttributeError` on `init_pool()` when the
+  SSH tunnel path is taken.
+
+### Maintenance
+- `migration_import/`, `migrations/`, and `notebooks/` added to
+  `.gitignore`.
+
 ## [0.4.2] - 2026-05-11
 
 ### Changed

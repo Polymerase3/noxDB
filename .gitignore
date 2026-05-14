@@ -226,3 +226,8 @@ users/*_with_passwords.sql
 # Local DB dumps
 *.sql.gz
 dumps/
+
+# Local data directories
+migration_import/
+migrations/
+notebooks/
