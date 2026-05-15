@@ -29,7 +29,7 @@ MANIFEST_OPTIONAL = ("storage_tier", "checksum_md5")
 
 # Schema enums (mirror the DB ENUM/CHECK constraints).
 ALLOWED_SEX = frozenset({"M", "F"})
-ALLOWED_SAMPLE_TYPE = frozenset({"sample", "mockIP", "input", "anchor"})
+ALLOWED_SAMPLE_TYPE = frozenset({"sample", "mockIP", "input", "anchor", "NC"})
 ALLOWED_FILE_TYPE = frozenset({
     "fastq_r1", "fastq_r2", "fastq_single", "bam", "counts",
     "beer_norm", "zigp_norm", "edger_norm",

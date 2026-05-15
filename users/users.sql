@@ -40,19 +40,16 @@ GRANT ALL PRIVILEGES ON dbmaria_project.*
     WITH GRANT OPTION;
 
 
--- =========================================================
--- Read-write  (SELECT, INSERT, UPDATE, DELETE)
--- =========================================================
 CREATE USER IF NOT EXISTS 'lovro.trgovec-greif'@'lisc.%'
     IDENTIFIED BY 'CHANGEME_lovro.trgovec-greif';
 
 CREATE USER IF NOT EXISTS 'melanie.prinzensteiner'@'lisc.%'
     IDENTIFIED BY 'CHANGEME_melanie.prinzensteiner';
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON dbmaria_project.*
+GRANT SELECT ON dbmaria_project.*
     TO 'lovro.trgovec-greif'@'lisc.%';
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON dbmaria_project.*
+GRANT SELECT ON dbmaria_project.*
     TO 'melanie.prinzensteiner'@'lisc.%';
 
 
