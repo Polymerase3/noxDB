@@ -10,6 +10,30 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-15
+
+### Added
+- `docs/quickstart.md` section 14: full `fetch` module example with live
+  output — project structure (`projects.get`, `project_summary`), file
+  manifest (`files_for_project`), and `fetch.export_project` producing a
+  local folder with `metadata.csv` and `README.txt`. Also shows the
+  `include_files=True` / `layout` / `file_types` path for on-LiSC use.
+- `docs/data-preparation.md`: new data-preparation section covering how
+  raw exports are transformed before import.
+
+### Changed
+- `docs/schema.md` fully rewritten: every table now has a complete
+  column-by-column reference (type, nullability, constraints). Controls
+  design documented in a dedicated section — mockIP, anchor, NC, and input
+  each live in their own project (ids 61, 64, 67, 58 respectively) and are
+  linked back to study projects via the `SQR`/`SQRP` plate coordinates.
+  Nullable `sex`/`age` and the `NC` ENUM addition from migration `002` are
+  called out inline. Previously wrong column names (`meta_key` → `key_name`,
+  `value_float` → `value_numeric`) corrected.
+- `docs/cli.md` removed; CLI is no longer part of the package.
+- `mkdocs.yml` updated to reflect the new documentation structure.
+- DB renamed to `noxDB`.
+
 ## [0.4.5] - 2026-05-15
 
 ### Added
