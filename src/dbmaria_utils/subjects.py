@@ -62,7 +62,7 @@ def create(
     cur.execute(
         "INSERT INTO subjects (project_id, subject_code, sex, origin) "
         "VALUES (?, ?, ?, ?)",
-        (project_id, subject_code, sex or None, origin),
+        (project_id, subject_code, sex if sex and sex.upper() not in ("NA", "N/A") else None, origin),
     )
     return cur.lastrowid
 

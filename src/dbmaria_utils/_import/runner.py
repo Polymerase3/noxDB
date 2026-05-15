@@ -69,9 +69,12 @@ def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
 
     Doesn't look at the database, just at the row contents.
     """
+    _NULLISH = frozenset({"", "na", "n/a"})
+
     errs: list[str] = []
     for r in bundle.subjects:
-        if r.sex and r.sex not in schema.ALLOWED_SEX:
+        sex = (r.sex or "").strip()
+        if sex.lower() not in _NULLISH and sex not in schema.ALLOWED_SEX:
             errs.append(
                 f"subjects.csv row {r.row_num}: sex={r.sex!r} not in "
                 f"{sorted(schema.ALLOWED_SEX)}"
@@ -87,7 +90,8 @@ def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
                 f"visits.csv row {r.row_num}: timepoint is empty; "
                 "non-null timepoints are required for idempotent import"
             )
-        if r.age:
+        age_raw = (r.age or "").strip()
+        if age_raw.lower() not in _NULLISH:
             try:
                 age = schema.coerce_int(r.age, field=f"visits.csv row {r.row_num}.age")
                 if age < 0:
@@ -279,7 +283,8 @@ def _commit(
 
     visit_ids: dict[tuple[str, str], int] = {}
     for v in bundle.visits:
-        age = schema.coerce_int(v.age, field=f"visits.csv row {v.row_num}.age") if v.age else None
+        age_raw = (v.age or "").strip()
+        age = schema.coerce_int(age_raw, field=f"visits.csv row {v.row_num}.age") if age_raw and age_raw.upper() not in ("NA", "N/A") else None
         vid, created = visits.get_or_create(
             cur, subject_ids[v.subject_code], v.timepoint, v.group_test, age,
         )
