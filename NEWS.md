@@ -10,6 +10,14 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-15
+
+### Changed
+- `docs/index.md`: replaced CLI card with cards for Preparing data, Testing,
+  and Contributing; added Gabriel Innocenti's email to the contact section.
+- `README.md`: restored WIP status, codecov, and version badges that were
+  removed in a previous documentation pass.
+
 ## [0.5.0] - 2026-05-15
 
 ### Added

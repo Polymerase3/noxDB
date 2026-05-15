@@ -1,6 +1,9 @@
 # noxDB
 
+[![Project Status: WIP – Initial development is in progress.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 [![CI](https://github.com/Polymerase3/noxdb/actions/workflows/ci.yml/badge.svg)](https://github.com/Polymerase3/noxdb/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Polymerase3/noxdb/branch/main/graph/badge.svg)](https://codecov.io/gh/Polymerase3/noxdb)
+[![version](https://img.shields.io/badge/version-0.5.1-blue)](./NEWS.md)
 [![docs](https://img.shields.io/badge/docs-mkdocs--material-blue)](https://polymerase3.github.io/noxdb/)
 
 `noxdb` is the lab's MariaDB metadata database and the Python package that talks to it. It stores metadata and file pointers for biological samples — subjects, visits, samples, and where the resulting data files live on disk — organised as `project → subject → visit → sample → files`.
