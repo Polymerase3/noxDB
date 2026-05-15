@@ -36,7 +36,7 @@ def create(
     cur,
     subject_id: int,
     group_test: str,
-    age: int,
+    age: int | None,
     *,
     timepoint: str | None = None,
 ) -> int:
@@ -46,7 +46,9 @@ def create(
         cur: Audit-logging cursor from `transaction()`.
         subject_id: Parent subject. Must already exist.
         group_test: Group/test label for this visit.
-        age: Subject age at visit. The DB enforces ``age >= 0``.
+        age: Subject age at visit, or ``None`` for controls without a
+            known age (DB-side CHECK allows NULL; non-null values must
+            be >= 0).
         timepoint: Optional timepoint string; nullable.
 
     Returns:
@@ -118,7 +120,7 @@ def get_or_create(
     subject_id: int,
     timepoint: str,
     group_test: str,
-    age: int,
+    age: int | None,
 ) -> tuple[int, bool]:
     """Idempotently return the visit id, inserting if needed.
 

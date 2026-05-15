@@ -35,7 +35,7 @@ def create(
     cur,
     project_id: int,
     subject_code: str,
-    sex: str,
+    sex: str | None,
     *,
     origin: str | None = None,
 ) -> int:
@@ -45,7 +45,8 @@ def create(
         cur: Audit-logging cursor from `transaction()`.
         project_id: Parent project. Must already exist.
         subject_code: Stable code, unique within the project.
-        sex: ``'M'`` or ``'F'`` (DB-side `CHECK` constraint).
+        sex: ``'M'``, ``'F'``, or ``None`` for controls without a
+            known sex (DB-side CHECK allows NULL).
         origin: Optional free-text origin.
 
     Returns:
@@ -54,14 +55,14 @@ def create(
     Raises:
         mariadb.IntegrityError: If ``(project_id, subject_code)`` already
             exists, ``project_id`` does not reference an existing
-            project, or ``sex`` is not in ``('M', 'F')``. Use
-            [`get_or_create`][dbmaria_utils.subjects.get_or_create] for
-            idempotent inserts.
+            project, or ``sex`` is a non-null value outside ``('M', 'F')``.
+            Use [`get_or_create`][dbmaria_utils.subjects.get_or_create]
+            for idempotent inserts.
     """
     cur.execute(
         "INSERT INTO subjects (project_id, subject_code, sex, origin) "
         "VALUES (?, ?, ?, ?)",
-        (project_id, subject_code, sex, origin),
+        (project_id, subject_code, sex or None, origin),
     )
     return cur.lastrowid
 
@@ -109,7 +110,7 @@ def get_or_create(
     cur,
     project_id: int,
     subject_code: str,
-    sex: str,
+    sex: str | None,
     *,
     origin: str | None = None,
 ) -> tuple[int, bool]:

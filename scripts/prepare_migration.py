@@ -112,6 +112,24 @@ def _parse_age(raw: str, label: str, warnings: list[str]) -> str | None:
         return raw.strip()
 
 
+def _detect_sample_type(sample_name: str) -> str:
+    """Infer sample_type from substrings in the sample name.
+
+    Checked case-insensitively except 'NC', which is uppercase-only to
+    avoid false matches (e.g. 'incubation').
+    """
+    lower = sample_name.lower()
+    if "anchor" in lower:
+        return "anchor"
+    if "mock" in lower:
+        return "mockIP"
+    if "NC" in sample_name:
+        return "NC"
+    if "input" in lower:
+        return "input"
+    return "sample"
+
+
 def _sanitize_key(col: str) -> str:
     """Turn a column name into a safe meta key (lowercase, no spaces/hyphens)."""
     return re.sub(r"[^a-z0-9_]", "_", col.strip().lower())
@@ -198,6 +216,9 @@ def process_meta_files(
                     )
                     continue
 
+                sample_type = _detect_sample_type(sample_name)
+                is_control  = sample_type != "sample"
+
                 # ── PROJECT ──────────────────────────────────────────────
                 if project not in seen_projects:
                     seen_projects.add(project)
@@ -217,7 +238,7 @@ def process_meta_files(
                 bad_sex = sex not in ("M", "F")
                 bad_age = age_raw.upper() in ("NA", "N/A", "")
 
-                if bad_sex or bad_age:
+                if (bad_sex or bad_age) and not is_control:
                     label = f"{meta_file.name} row {row_num} ({sample_name!r})"
                     reasons = []
                     if bad_sex:
@@ -244,7 +265,7 @@ def process_meta_files(
                 # ── VISIT ────────────────────────────────────────────────
                 timepoint  = (row.get("timepoint") or "").strip() if has_timepoint else "baseline"
                 group_test = (row.get("group_test") or "").strip()
-                age        = _parse_age(
+                age        = "" if is_control else _parse_age(
                     age_raw,
                     f"{meta_file.name} row {row_num}",
                     warnings,
@@ -288,7 +309,7 @@ def process_meta_files(
                     "sample_name":    sample_name,
                     "subject_code":   subject_code,
                     "timepoint":      timepoint,
-                    "sample_type":    "sample",
+                    "sample_type":    sample_type,
                     "sqr":            sqr,
                     "sqrp":           sqrp,
                     "library":        lib,

@@ -71,7 +71,7 @@ def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
     """
     errs: list[str] = []
     for r in bundle.subjects:
-        if r.sex not in schema.ALLOWED_SEX:
+        if r.sex and r.sex not in schema.ALLOWED_SEX:
             errs.append(
                 f"subjects.csv row {r.row_num}: sex={r.sex!r} not in "
                 f"{sorted(schema.ALLOWED_SEX)}"
@@ -87,14 +87,15 @@ def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
                 f"visits.csv row {r.row_num}: timepoint is empty; "
                 "non-null timepoints are required for idempotent import"
             )
-        try:
-            age = schema.coerce_int(r.age, field=f"visits.csv row {r.row_num}.age")
-            if age < 0:
-                errs.append(
-                    f"visits.csv row {r.row_num}: age must be >= 0, got {age}"
-                )
-        except ValueError as exc:
-            errs.append(str(exc))
+        if r.age:
+            try:
+                age = schema.coerce_int(r.age, field=f"visits.csv row {r.row_num}.age")
+                if age < 0:
+                    errs.append(
+                        f"visits.csv row {r.row_num}: age must be >= 0, got {age}"
+                    )
+            except ValueError as exc:
+                errs.append(str(exc))
 
     for r in bundle.samples:
         if r.sample_type not in schema.ALLOWED_SAMPLE_TYPE:
@@ -278,7 +279,7 @@ def _commit(
 
     visit_ids: dict[tuple[str, str], int] = {}
     for v in bundle.visits:
-        age = schema.coerce_int(v.age, field=f"visits.csv row {v.row_num}.age")
+        age = schema.coerce_int(v.age, field=f"visits.csv row {v.row_num}.age") if v.age else None
         vid, created = visits.get_or_create(
             cur, subject_ids[v.subject_code], v.timepoint, v.group_test, age,
         )

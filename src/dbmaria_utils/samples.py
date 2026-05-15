@@ -51,7 +51,7 @@ def create(
         visit_id: Parent visit. Must already exist.
         sample_name: Globally unique sample name.
         sample_type: One of ``'sample'``, ``'mockIP'``, ``'input'``,
-            ``'anchor'`` (DB-side `CHECK` constraint).
+            ``'anchor'``, ``'NC'`` (DB-side `ENUM` constraint).
         sqr: SQR identifier.
         sqrp: SQRP identifier.
         library: Library identifier.
