@@ -5,7 +5,7 @@ Run with the project venv:
 
 Prerequisites:
   - SSH gateway reachable (ccr-lab.lisc.univie.ac.at)
-  - ~/.my.cnf has [labdb] and [labdb-ssh] sections (local_port=3307 optional)
+  - ~/.my.cnf has [noxdb] and [noxdb-ssh] sections (local_port=3307 optional)
   - pip install -e ".[analysis]" done
 
 Steps covered: init_pool, projects, project_summary, samples_for_project,
@@ -28,8 +28,8 @@ pd.set_option("display.max_columns", 20)
 pd.set_option("display.width", 120)
 pd.set_option("display.max_colwidth", 30)
 
-from dbmaria_utils import init_pool, close_pool, transaction
-from dbmaria_utils import projects, subjects, visits, samples, queries
+from noxdb import init_pool, close_pool, transaction
+from noxdb import projects, subjects, visits, samples, queries
 
 def jsonable(obj):
     if isinstance(obj, (datetime, date)):

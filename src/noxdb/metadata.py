@@ -70,8 +70,8 @@ def _eav_split(value: Any) -> tuple[str, int | None, Any, bool | None, str | Non
     Raises:
         ValueError: If ``value`` is ``None``. The schema `CHECK` forbids
             all-NULL rows; failing here makes the error legible. Use
-            [`delete_visit`][dbmaria_utils.metadata.delete_visit] /
-            [`delete_sample`][dbmaria_utils.metadata.delete_sample] to
+            [`delete_visit`][noxdb.metadata.delete_visit] /
+            [`delete_sample`][noxdb.metadata.delete_sample] to
             remove an entry.
         TypeError: If ``value`` is not one of the supported types.
     """
@@ -94,7 +94,7 @@ def _eav_split(value: Any) -> tuple[str, int | None, Any, bool | None, str | Non
 def _row_to_value(row: dict[str, Any]) -> Any:
     """Decode an EAV row back to a native Python value.
 
-    Inverse of [`_eav_split`][dbmaria_utils.metadata._eav_split]. Picks
+    Inverse of [`_eav_split`][noxdb.metadata._eav_split]. Picks
     the populated column by ``value_type`` and coerces ``value_bool``
     back to a Python ``bool`` (the driver returns ``0``/``1`` because
     BOOLEAN is TINYINT(1)).
@@ -262,7 +262,7 @@ def delete_visit(cur, visit_id: int, key: str) -> bool:
 def set_sample(cur, sample_id: int, key: str, value: Any) -> SetResult:
     """Upsert a sample_metadata entry. Idempotent.
 
-    See [`set_visit`][dbmaria_utils.metadata.set_visit] for the
+    See [`set_visit`][noxdb.metadata.set_visit] for the
     contract; this is the sample-keyed variant.
 
     Args:

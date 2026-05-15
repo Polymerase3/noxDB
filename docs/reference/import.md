@@ -7,16 +7,16 @@ for the command-line wrapper.
 
 ## Top-level entry point
 
-::: dbmaria_utils._import
+::: noxdb._import
 
 ## Runner
 
-::: dbmaria_utils._import.runner
+::: noxdb._import.runner
 
 ## Loader
 
-::: dbmaria_utils._import.loader
+::: noxdb._import.loader
 
 ## Schema
 
-::: dbmaria_utils._import.schema
+::: noxdb._import.schema

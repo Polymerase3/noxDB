@@ -8,7 +8,7 @@ issues INSERT/UPDATE/DELETE.
 All functions take a cursor as their first argument, so callers control
 the transaction boundary just like with the CRUD modules:
 
-    from dbmaria_utils import queries, transaction
+    from noxdb import queries, transaction
 
     with transaction() as cur:
         df = queries.samples_with_metadata(cur, project_id=1)
@@ -32,10 +32,10 @@ if TYPE_CHECKING:  # pragma: no cover - import-time only
     import pandas as pd
 
 # Re-used internally for EAV row → native value coercion.
-from dbmaria_utils.metadata import _row_to_value
+from noxdb.metadata import _row_to_value
 
 # Re-used to derive the expected tier for a file_type.
-from dbmaria_utils.files import (
+from noxdb.files import (
     _ALL_TYPES as _FILE_TYPES,
     _archive_root,
     _expected_tier,
@@ -59,7 +59,7 @@ def _pd() -> Any:
     except ImportError as exc:  # pragma: no cover - exercised when extra missing
         raise ImportError(
             "pandas is required for DataFrame-returning queries; install with "
-            "`pip install 'phiper-db[analysis]'` or `pip install pandas`"
+            "`pip install 'noxdb[analysis]'` or `pip install pandas`"
         ) from exc
     return pd
 
@@ -265,7 +265,7 @@ def samples_with_metadata(
     """Pivot EAV metadata into one row per sample (wide form).
 
     The base columns come from
-    [`samples_for_project`][dbmaria_utils.queries.samples_for_project].
+    [`samples_for_project`][noxdb.queries.samples_for_project].
     Each metadata key becomes a column. Sample-level keys are taken from
     ``sample_metadata``; visit-level keys from ``visit_metadata`` are
     also added when ``include_visit_metadata`` is ``True``, prefixed
@@ -464,7 +464,7 @@ def project_tidy_table(cur, project_id: int) -> "pd.DataFrame":
     """Full tidy table for a project — every sample × every metadata key.
 
     Convenience wrapper over
-    [`samples_with_metadata`][dbmaria_utils.queries.samples_with_metadata]
+    [`samples_with_metadata`][noxdb.queries.samples_with_metadata]
     with both sample- and visit-level metadata included. The intended
     use is ``df.to_csv(...)`` / ``df.to_excel(...)`` for downstream
     analysis in pandas or R.
@@ -644,7 +644,7 @@ def find_db_files_missing_on_disk(
 
     Returns:
         A ``pandas.DataFrame`` with the same columns as
-        [`files_for_project`][dbmaria_utils.queries.files_for_project],
+        [`files_for_project`][noxdb.queries.files_for_project],
         containing only rows whose path is missing.
 
     Raises:
@@ -690,7 +690,7 @@ def find_disk_files_missing_in_db(
     Args:
         cur: Audit-logging cursor from `transaction()`.
         roots: List of directories to walk. ``None`` scans
-            ``LABDB_ARCHIVE_ROOT`` and ``LABDB_WORK_ROOT`` (defaults
+            ``NOXDB_ARCHIVE_ROOT`` and ``NOXDB_WORK_ROOT`` (defaults
             ``/lisc/archive`` and ``/lisc/work``).
 
     Returns:

@@ -40,7 +40,7 @@ tracked in `sample_files`.
   append-only. Never edit a merged migration — add the next number.
 - **Stored file paths** must be absolute. Enforced by a `CHECK`
   constraint and re-validated in
-  [`files.register`][dbmaria_utils.files.register].
+  [`files.register`][noxdb.files.register].
 
 ## EAV metadata
 
@@ -50,14 +50,14 @@ tables: each row stores one `(meta_key, value)` pair for one entity.
 Each row carries exactly one of `value_int`, `value_float`,
 `value_bool`, `value_text` — `value_type` says which.
 
-Use [`metadata.set_visit`][dbmaria_utils.metadata.set_visit] /
-[`metadata.set_sample`][dbmaria_utils.metadata.set_sample] for writes;
+Use [`metadata.set_visit`][noxdb.metadata.set_visit] /
+[`metadata.set_sample`][noxdb.metadata.set_sample] for writes;
 they are idempotent (`INSERT … ON DUPLICATE KEY UPDATE`) and return
 `"inserted" | "updated" | "unchanged"`.
 
 To get metadata back as wide-form columns, use
-[`queries.samples_with_metadata`][dbmaria_utils.queries.samples_with_metadata]
-or [`queries.project_tidy_table`][dbmaria_utils.queries.project_tidy_table].
+[`queries.samples_with_metadata`][noxdb.queries.samples_with_metadata]
+or [`queries.project_tidy_table`][noxdb.queries.project_tidy_table].
 
 ## Storage tiers
 
@@ -65,12 +65,12 @@ or [`queries.project_tidy_table`][dbmaria_utils.queries.project_tidy_table].
 
 | `file_type`         | Required tier      | Root env var          | Default        |
 |---------------------|--------------------|-----------------------|----------------|
-| `fastq`, `bam`, …   | `archive`          | `LABDB_ARCHIVE_ROOT`  | `/lisc/archive`|
-| derived / temp      | `work`             | `LABDB_WORK_ROOT`     | `/lisc/work`   |
+| `fastq`, `bam`, …   | `archive`          | `NOXDB_ARCHIVE_ROOT`  | `/lisc/archive`|
+| derived / temp      | `work`             | `NOXDB_WORK_ROOT`     | `/lisc/work`   |
 | anything            | `scratch`, `external` | —                  | —              |
 
 Flipping `archive` ↔ `work` on an existing row is rejected by
-[`files.update`][dbmaria_utils.files.update]. `scratch` / `external`
+[`files.update`][noxdb.files.update]. `scratch` / `external`
 overrides are still allowed for one-off cases.
 
 ## Where the SQL lives

@@ -4,7 +4,7 @@ Public surface is :func:`runner.import_project_from_dir`. The
 :mod:`scripts.import_project` CLI is a thin wrapper around it.
 """
 
-from dbmaria_utils._import.runner import (
+from noxdb._import.runner import (
     ProjectImportError,
     import_project_from_dir,
 )

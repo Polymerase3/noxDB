@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from dbmaria_utils._import import schema
+from noxdb._import import schema
 
 
 @dataclass
@@ -93,7 +93,7 @@ def load_project_dir(root: str | Path) -> ProjectBundle:
 
     Returns:
         A
-        [`ProjectBundle`][dbmaria_utils._import.loader.ProjectBundle]
+        [`ProjectBundle`][noxdb._import.loader.ProjectBundle]
         with the parsed contents. Unknown columns produce warnings
         stored on the bundle rather than raising.
 

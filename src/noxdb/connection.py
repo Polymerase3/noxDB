@@ -1,4 +1,4 @@
-"""Connection pooling, transactions, and audit logging for dbmaria_project.
+"""Connection pooling, transactions, and audit logging for ccr_metadata.
 
 Public API:
     get_connection()  -- context manager yielding a pooled mariadb.Connection
@@ -9,7 +9,7 @@ Public API:
 
 Credentials are read from ``~/.my.cnf`` by default. The section name and any
 individual fields can be overridden via ``init_pool(...)`` keyword arguments.
-The database name additionally honors the ``LABDB_DATABASE`` env variable
+The database name additionally honors the ``NOXDB_DATABASE`` env variable
 (env var loses to an explicit ``init_pool(database=...)`` override).
 
 SSH tunneling
@@ -21,7 +21,7 @@ parameters and ``init_pool()`` will open a local-port-forwarding tunnel before
 creating the pool. The DB ``host``/``port`` you configure are interpreted as
 the *remote* DB endpoint (i.e. the Galera cluster as seen from the VM).
 
-SSH parameters (kwargs > ``LABDB_SSH_*`` env vars > ``[labdb-ssh]`` INI section):
+SSH parameters (kwargs > ``NOXDB_SSH_*`` env vars > ``[noxdb-ssh]`` INI section):
     ssh_host, ssh_port (default 22), ssh_user, ssh_password, ssh_pkey,
     ssh_pkey_password.
 
@@ -30,7 +30,7 @@ directly to ``host:port`` (useful when running on the VM itself).
 
 Write statements (INSERT/UPDATE/DELETE/REPLACE) issued via ``execute()`` or via
 the cursor yielded by ``transaction()`` are appended to an audit log at
-``~/.labdb/audit.log`` (override with ``LABDB_AUDIT_LOG``).
+``~/.noxdb/audit.log`` (override with ``NOXDB_AUDIT_LOG``).
 """
 
 from __future__ import annotations
@@ -50,15 +50,15 @@ import mariadb
 
 DEFAULT_POOL_SIZE = 10
 DEFAULT_CONFIG_PATH = "~/.my.cnf"
-DEFAULT_SECTION = "labdb"
-DEFAULT_SSH_SECTION = "labdb-ssh"
-DEFAULT_DATABASE = "dbmaria_project"
+DEFAULT_SECTION = "noxdb"
+DEFAULT_SSH_SECTION = "noxdb-ssh"
+DEFAULT_DATABASE = "ccr_metadata"
 
 _pool: mariadb.ConnectionPool | None = None
 _pool_counter = 0  # appended to pool_name so re-inits do not collide
 _tunnel: Any = None  # SSHTunnelForwarder | None; Any avoids importing sshtunnel at module load
 
-_logger = logging.getLogger("dbmaria_utils.audit")
+_logger = logging.getLogger("noxdb.audit")
 _logger.setLevel(logging.INFO)
 _logger.propagate = False  # do not bubble to root logger
 _USER = getpass.getuser()
@@ -173,7 +173,7 @@ def _resolve_credentials(
 
     Resolution order (highest priority first):
       1. Explicit overrides passed to init_pool()
-      2. LABDB_DATABASE env var (database field only)
+      2. NOXDB_DATABASE env var (database field only)
       3. Values from the INI file (if config_path is not None)
       4. Hardcoded defaults
     """
@@ -187,7 +187,7 @@ def _resolve_credentials(
         creds = _load_credentials(Path(config_path).expanduser(), section)
 
     # env-var override for database (loses to explicit init_pool override below)
-    env_db = os.environ.get("LABDB_DATABASE")
+    env_db = os.environ.get("NOXDB_DATABASE")
     if env_db:
         creds["database"] = env_db
 
@@ -215,12 +215,12 @@ def _resolve_credentials(
 # --------------------------------------------------------------------------- #
 
 _SSH_ENV_MAP = {
-    "ssh_host": "LABDB_SSH_HOST",
-    "ssh_port": "LABDB_SSH_PORT",
-    "ssh_user": "LABDB_SSH_USER",
-    "ssh_password": "LABDB_SSH_PASSWORD",
-    "ssh_pkey": "LABDB_SSH_PKEY",
-    "ssh_pkey_password": "LABDB_SSH_PKEY_PASSWORD",
+    "ssh_host": "NOXDB_SSH_HOST",
+    "ssh_port": "NOXDB_SSH_PORT",
+    "ssh_user": "NOXDB_SSH_USER",
+    "ssh_password": "NOXDB_SSH_PASSWORD",
+    "ssh_pkey": "NOXDB_SSH_PKEY",
+    "ssh_pkey_password": "NOXDB_SSH_PKEY_PASSWORD",
 }
 
 
@@ -256,8 +256,8 @@ def _resolve_ssh_credentials(
 
     Resolution order (highest priority first):
       1. Explicit overrides passed to init_pool()
-      2. LABDB_SSH_* env vars
-      3. Values from the [labdb-ssh] INI section (if config_path is not None)
+      2. NOXDB_SSH_* env vars
+      3. Values from the [noxdb-ssh] INI section (if config_path is not None)
     """
     if config_path is None:
         creds: dict[str, Any] = {}
@@ -308,7 +308,7 @@ def _open_tunnel(
     if not ssh_creds.get("ssh_user"):
         raise RuntimeError(
             "Cannot open SSH tunnel: 'ssh_user' is missing. "
-            "Provide it via init_pool(ssh_user=...), LABDB_SSH_USER, or the [labdb-ssh] config section."
+            "Provide it via init_pool(ssh_user=...), NOXDB_SSH_USER, or the [noxdb-ssh] config section."
         )
 
     kwargs: dict[str, Any] = {
@@ -347,7 +347,7 @@ def _setup_audit_logger() -> None:
     if _logger.handlers:
         return
     log_path = Path(
-        os.environ.get("LABDB_AUDIT_LOG", str(Path.home() / ".labdb" / "audit.log"))
+        os.environ.get("NOXDB_AUDIT_LOG", str(Path.home() / ".noxdb" / "audit.log"))
     ).expanduser()
     log_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
@@ -373,7 +373,7 @@ def _log_if_write(query: str, params: Any, rowcount: int) -> None:
     snippet = query.strip().replace("\n", " ")
     if len(snippet) > 200:
         snippet = snippet[:200] + "..."
-    if os.environ.get("LABDB_AUDIT_LOG_PARAMS") == "1":
+    if os.environ.get("NOXDB_AUDIT_LOG_PARAMS") == "1":
         _logger.info(
             "%s | params=%r | rows=%d",
             snippet, params, rowcount,
@@ -411,7 +411,7 @@ def init_pool(
     """Create the connection pool.
 
     When ``ssh_host`` resolves to a non-empty value (via kwarg,
-    ``LABDB_SSH_HOST``, or the ``[labdb-ssh]`` config section), an SSH
+    ``NOXDB_SSH_HOST``, or the ``[noxdb-ssh]`` config section), an SSH
     tunnel is opened to that host and the pool connects through it;
     the configured DB ``host:port`` is the tunnel's remote bind target.
 
@@ -425,7 +425,7 @@ def init_pool(
         port: DB port override.
         user: DB user override.
         password: DB password override.
-        database: DB name override. Also honours the ``LABDB_DATABASE``
+        database: DB name override. Also honours the ``NOXDB_DATABASE``
             env var (env var loses to an explicit kwarg).
         ssh_host: SSH jump host. When non-empty, a tunnel is opened.
         ssh_port: SSH port (default 22).
@@ -436,7 +436,7 @@ def init_pool(
 
     Raises:
         RuntimeError: If the pool is already initialized (call
-            [`close_pool`][dbmaria_utils.connection.close_pool] first
+            [`close_pool`][noxdb.connection.close_pool] first
             to reconfigure), or if SSH credentials are incomplete, or
             if required DB credentials are missing.
         FileNotFoundError: If ``config_path`` is set but missing.
@@ -489,7 +489,7 @@ def init_pool(
 
     try:
         _pool_counter += 1
-        pool_name = f"dbmaria_utils_{os.getpid()}_{_pool_counter}"
+        pool_name = f"noxdb_{os.getpid()}_{_pool_counter}"
         _pool = mariadb.ConnectionPool(
             pool_name=pool_name,
             pool_size=pool_size,
@@ -515,7 +515,7 @@ def close_pool() -> None:
 
     Safe to call when no pool exists. Used by test teardown and at
     shutdown. After this returns,
-    [`init_pool`][dbmaria_utils.connection.init_pool] can be called
+    [`init_pool`][noxdb.connection.init_pool] can be called
     again.
     """
     global _pool, _tunnel
@@ -646,14 +646,14 @@ def transaction() -> Iterator[_LoggingCursor]:
     """Yield an audit-logging cursor. All statements share one transaction.
 
     Commit and rollback are inherited from
-    [`get_connection`][dbmaria_utils.connection.get_connection]: if the
+    [`get_connection`][noxdb.connection.get_connection]: if the
     ``with`` block exits normally everything commits; if any statement
     raises, everything rolls back atomically.
 
     Yields:
         A ``_LoggingCursor`` that audits write statements
-        (INSERT/UPDATE/DELETE/REPLACE) to ``~/.labdb/audit.log``
-        (override via ``LABDB_AUDIT_LOG``).
+        (INSERT/UPDATE/DELETE/REPLACE) to ``~/.noxdb/audit.log``
+        (override via ``NOXDB_AUDIT_LOG``).
     """
     with get_connection() as conn:
         cursor = _LoggingCursor(conn.cursor())
@@ -668,7 +668,7 @@ def execute(query: str, params: Any = None) -> list[dict[str, Any]]:
 
     Each call uses its own pooled connection and its own transaction;
     for multi-statement atomicity use
-    [`transaction`][dbmaria_utils.connection.transaction] instead.
+    [`transaction`][noxdb.connection.transaction] instead.
 
     Args:
         query: SQL statement, optionally with ``?`` placeholders.

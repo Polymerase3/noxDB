@@ -1,4 +1,4 @@
-"""Insert a small set of fake-but-realistic rows into dbmaria_project.
+"""Insert a small set of fake-but-realistic rows into ccr_metadata.
 
 Covers: 1 project, 2 subjects (cross-sectional + longitudinal), several
 samples per visit, sample_files rows, and visit_metadata / sample_metadata
@@ -9,7 +9,7 @@ Connection settings are read from environment variables:
     DB_PORT     (default: 3306)
     DB_USER     (default: root)
     DB_PASSWORD (default: empty)
-    DB_NAME     (default: dbmaria_project)
+    DB_NAME     (default: ccr_metadata)
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 import sys
 
-from dbmaria_utils import close_pool, get_connection, init_pool
+from noxdb import close_pool, get_connection, init_pool
 
 
 def insert_project(cur) -> int:
@@ -216,7 +216,7 @@ def main() -> int:
         port=int(os.environ.get("DB_PORT", "3306")),
         user=os.environ.get("DB_USER", "root"),
         password=os.environ.get("DB_PASSWORD", ""),
-        database=os.environ.get("DB_NAME", "dbmaria_project"),
+        database=os.environ.get("DB_NAME", "ccr_metadata"),
     )
     try:
         with get_connection() as conn:

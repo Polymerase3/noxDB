@@ -9,11 +9,11 @@ from pathlib import Path
 import mariadb
 import pytest
 
-from dbmaria_utils import close_pool, get_connection, init_pool
+from noxdb import close_pool, get_connection, init_pool
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_FILE = REPO_ROOT / "schema" / "001_initial.sql"
-DB_NAME = os.environ.get("DB_NAME", "dbmaria_project")
+DB_NAME = os.environ.get("DB_NAME", "ccr_metadata")
 
 if not re.fullmatch(r"[A-Za-z0-9_]+", DB_NAME):
     raise RuntimeError(
@@ -95,7 +95,7 @@ def _init_pool(fresh_db, tmp_path_factory):
     not need a ~/.my.cnf file.
     """
     audit_path = tmp_path_factory.mktemp("audit") / "audit.log"
-    os.environ["LABDB_AUDIT_LOG"] = str(audit_path)
+    os.environ["NOXDB_AUDIT_LOG"] = str(audit_path)
 
     init_pool(
         config_path=None,
@@ -107,7 +107,7 @@ def _init_pool(fresh_db, tmp_path_factory):
     )
     yield audit_path
     close_pool()
-    os.environ.pop("LABDB_AUDIT_LOG", None)
+    os.environ.pop("NOXDB_AUDIT_LOG", None)
 
 
 @pytest.fixture

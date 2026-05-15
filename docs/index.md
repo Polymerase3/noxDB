@@ -1,6 +1,6 @@
-# phiper-db
+# noxDB
 
-Schema, migrations, and Python tooling for `dbmaria_project`, the lab's
+Schema, migrations, and Python tooling for `ccr_metadata`, the lab's
 MariaDB metadata database (MariaDB ≥ 10, InnoDB, Galera). The database
 stores **metadata and file pointers**; bulk data lives on disk.
 
@@ -68,4 +68,4 @@ See [Schema](schema.md) for the full breakdown.
   <mateusz.kolek@meduniwien.ac.at>
 - Co-maintainer: Gabriel Innocenti
 - Bugs / feature requests:
-  [GitHub issues](https://github.com/Polymerase3/phiper-db/issues)
+  [GitHub issues](https://github.com/Polymerase3/noxdb/issues)

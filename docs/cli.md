@@ -59,7 +59,7 @@ inserted, what already existed, and what was unchanged per table.
 The same functionality is available as a Python call:
 
 ```python
-from dbmaria_utils._import import import_project_from_dir, ProjectImportError
+from noxdb._import import import_project_from_dir, ProjectImportError
 
 try:
     report = import_project_from_dir(

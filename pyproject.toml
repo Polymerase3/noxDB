@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "phiper-db"
+name = "noxdb"
 version = "0.4.5"
 description = "Schema, migrations, and Python tooling for the lab's MariaDB metadata database."
 requires-python = ">=3.10"
@@ -42,7 +42,7 @@ pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.coverage.run]
-source = ["src/dbmaria_utils"]
+source = ["src/noxdb"]
 branch = true
 
 [tool.coverage.report]

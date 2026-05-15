@@ -26,8 +26,8 @@ import sys
 
 sys.path.insert(0, "src")
 
-from dbmaria_utils import init_pool, close_pool, transaction
-from dbmaria_utils import projects as projects_mod
+from noxdb import init_pool, close_pool, transaction
+from noxdb import projects as projects_mod
 
 CONTROL_TYPES = ("mockIP", "anchor", "NC")
 

@@ -1,4 +1,4 @@
-"""Integration tests for dbmaria_utils.queries (require a live MariaDB).
+"""Integration tests for noxdb.queries (require a live MariaDB).
 
 Tests that build a DataFrame call ``pytest.importorskip("pandas")``; the
 report-only helpers (``project_summary``, ``integrity_check``) run without
@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import pytest
 
-from dbmaria_utils import (
+from noxdb import (
     metadata,
     projects,
     queries,

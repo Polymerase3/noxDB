@@ -24,7 +24,7 @@ DB_HOST=127.0.0.1 DB_USER=root DB_PASSWORD=... \
 ```
 
 Recognised env vars: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`,
-`DB_NAME` (default `dbmaria_project`).
+`DB_NAME` (default `ccr_metadata`).
 
 The script runs in a single transaction. Re-running against an
 already-seeded database will fail on unique constraints — drop and

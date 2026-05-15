@@ -1,6 +1,6 @@
 """Export project metadata + files from the database to a local folder.
 
-These helpers are the "consumer" side of phiper-db: given a project_id,
+These helpers are the "consumer" side of noxdb: given a project_id,
 materialize either the metadata table (CSV / Excel) or the file payloads
 (downloaded via SFTP when the database is reached through an SSH jump
 host, or copied directly from the filesystem when running on LiSC).
@@ -17,7 +17,7 @@ Layout produced by :func:`export_project`:
         └── <file_type>/<sample_name>.<ext>     # layout='by_type'
 
 All functions take an *optional* cursor and open their own
-:func:`dbmaria_utils.transaction` block when one isn't provided, so they
+:func:`noxdb.transaction` block when one isn't provided, so they
 work as one-shot calls from a notebook or composed inside a larger
 read transaction.
 """
@@ -30,8 +30,8 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
-from dbmaria_utils import projects, queries
-from dbmaria_utils.connection import (
+from noxdb import projects, queries
+from noxdb.connection import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_SSH_SECTION,
     _resolve_ssh_credentials,
@@ -124,7 +124,7 @@ class _Transport:
         except ImportError as exc:  # pragma: no cover - import guard
             raise ImportError(
                 "paramiko is required for SFTP downloads; install with "
-                "`pip install 'phiper-db[analysis]'` or `pip install paramiko`"
+                "`pip install 'noxdb[analysis]'` or `pip install paramiko`"
             ) from exc
 
         creds = self._ssh_creds
@@ -235,7 +235,7 @@ def download_files_for_project(
 
     SSH credentials are resolved from ``config_path`` / ``ssh_section``
     the same way
-    [`init_pool`][dbmaria_utils.connection.init_pool] does. When
+    [`init_pool`][noxdb.connection.init_pool] does. When
     ``ssh_host`` is unset the function falls back to local file copy
     via ``shutil.copyfile`` (useful when running on LiSC itself).
     Already-present destinations are skipped, so the call is resumable.
@@ -256,7 +256,7 @@ def download_files_for_project(
         ssh_section: Section name within ``config_path`` to read SSH
             credentials from.
         **ssh_overrides: Per-call SSH kwargs that win over the config
-            file and ``LABDB_SSH_*`` env vars.
+            file and ``NOXDB_SSH_*`` env vars.
 
     Returns:
         ``{"downloaded": [...], "skipped": [...], "failed": [...],
@@ -333,9 +333,9 @@ def export_project(
     """One-shot export: metadata table + files + README.
 
     Combines
-    [`export_metadata_table`][dbmaria_utils.fetch.export_metadata_table]
+    [`export_metadata_table`][noxdb.fetch.export_metadata_table]
     and
-    [`download_files_for_project`][dbmaria_utils.fetch.download_files_for_project]
+    [`download_files_for_project`][noxdb.fetch.download_files_for_project]
     and writes a small ``README.txt`` describing the project. Useful
     for handing a self-contained snapshot to a collaborator.
 
@@ -345,24 +345,24 @@ def export_project(
         project_id: Project to export.
         output_dir: Destination directory. Created if missing.
         file_types: Forwarded to
-            [`download_files_for_project`][dbmaria_utils.fetch.download_files_for_project].
+            [`download_files_for_project`][noxdb.fetch.download_files_for_project].
         layout: Forwarded to
-            [`download_files_for_project`][dbmaria_utils.fetch.download_files_for_project].
+            [`download_files_for_project`][noxdb.fetch.download_files_for_project].
         metadata_formats: Forwarded to
-            [`export_metadata_table`][dbmaria_utils.fetch.export_metadata_table].
+            [`export_metadata_table`][noxdb.fetch.export_metadata_table].
         include_files: When ``False``, skip file download entirely
             (only metadata + README are produced).
         config_path: See
-            [`download_files_for_project`][dbmaria_utils.fetch.download_files_for_project].
+            [`download_files_for_project`][noxdb.fetch.download_files_for_project].
         ssh_section: See
-            [`download_files_for_project`][dbmaria_utils.fetch.download_files_for_project].
+            [`download_files_for_project`][noxdb.fetch.download_files_for_project].
         **ssh_overrides: See
-            [`download_files_for_project`][dbmaria_utils.fetch.download_files_for_project].
+            [`download_files_for_project`][noxdb.fetch.download_files_for_project].
 
     Returns:
         ``{"project", "summary", "metadata", "files", "readme",
         "output_dir"}`` — the project row, the
-        [`project_summary`][dbmaria_utils.queries.project_summary]
+        [`project_summary`][noxdb.queries.project_summary]
         dict, paths of the metadata files, the file-download report,
         and the README path.
     """

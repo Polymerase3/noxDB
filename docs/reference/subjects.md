@@ -1,3 +1,3 @@
 # `subjects`
 
-::: dbmaria_utils.subjects
+::: noxdb.subjects

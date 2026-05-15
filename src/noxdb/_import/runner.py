@@ -22,10 +22,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from dbmaria_utils import files as files_mod
-from dbmaria_utils import metadata, projects, samples, subjects, visits
-from dbmaria_utils._import import loader, schema
-from dbmaria_utils.connection import transaction
+from noxdb import files as files_mod
+from noxdb import metadata, projects, samples, subjects, visits
+from noxdb._import import loader, schema
+from noxdb.connection import transaction
 
 
 class ProjectImportError(RuntimeError):
@@ -363,7 +363,7 @@ def import_project_from_dir(
             (use when files live on a remote mount not visible from
             this host).
         log_dir: Directory to write the JSON report to. Defaults to
-            ``~/.labdb/imports/``.
+            ``~/.noxdb/imports/``.
 
     Returns:
         An `ImportReport` with row counts per table.
@@ -426,7 +426,7 @@ def import_project_from_dir(
 def _write_log(log_dir: str | Path | None, report: ImportReport) -> None:
     """Append the JSON report to ``<log_dir>/<ts>_<project>.log``."""
     target = Path(log_dir).expanduser() if log_dir else (
-        Path.home() / ".labdb" / "imports"
+        Path.home() / ".noxdb" / "imports"
     )
     target.mkdir(parents=True, exist_ok=True)
     ts = time.strftime("%Y%m%dT%H%M%S")

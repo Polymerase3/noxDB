@@ -1,4 +1,4 @@
-"""Unit tests for dbmaria_utils.connection that do not require a live DB."""
+"""Unit tests for noxdb.connection that do not require a live DB."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from dbmaria_utils import connection as conn_mod
-from dbmaria_utils.connection import (
+from noxdb import connection as conn_mod
+from noxdb.connection import (
     _load_credentials,
     _log_if_write,
     _resolve_credentials,
@@ -20,8 +20,8 @@ from dbmaria_utils.connection import (
 def _isolate_module_state(monkeypatch, tmp_path):
     """Reset pool sentinel and redirect the audit log between tests."""
     monkeypatch.setattr(conn_mod, "_pool", None, raising=False)
-    monkeypatch.delenv("LABDB_DATABASE", raising=False)
-    monkeypatch.setenv("LABDB_AUDIT_LOG", str(tmp_path / "audit.log"))
+    monkeypatch.delenv("NOXDB_DATABASE", raising=False)
+    monkeypatch.setenv("NOXDB_AUDIT_LOG", str(tmp_path / "audit.log"))
     # Detach any handlers attached during a previous test
     for handler in list(conn_mod._logger.handlers):
         handler.close()
@@ -44,9 +44,9 @@ def _write_cnf(path: Path, body: str) -> Path:
 def test_load_credentials_happy(tmp_path):
     cnf = _write_cnf(
         tmp_path / "my.cnf",
-        "[labdb]\nhost=db.example\nport=3307\nuser=alice\npassword=secret\ndatabase=lab\n",
+        "[noxdb]\nhost=db.example\nport=3307\nuser=alice\npassword=secret\ndatabase=lab\n",
     )
-    creds = _load_credentials(cnf, "labdb")
+    creds = _load_credentials(cnf, "noxdb")
     assert creds == {
         "host": "db.example",
         "port": 3307,
@@ -57,30 +57,30 @@ def test_load_credentials_happy(tmp_path):
 
 
 def test_load_credentials_uses_defaults_for_optional_keys(tmp_path):
-    cnf = _write_cnf(tmp_path / "my.cnf", "[labdb]\nuser=alice\npassword=s\n")
-    creds = _load_credentials(cnf, "labdb")
+    cnf = _write_cnf(tmp_path / "my.cnf", "[noxdb]\nuser=alice\npassword=s\n")
+    creds = _load_credentials(cnf, "noxdb")
     assert creds["host"] == "localhost"
     assert creds["port"] == 3306
-    assert creds["database"] == "dbmaria_project"
+    assert creds["database"] == "ccr_metadata"
 
 
 def test_load_credentials_missing_file(tmp_path):
     with pytest.raises(FileNotFoundError):
-        _load_credentials(tmp_path / "does_not_exist.cnf", "labdb")
+        _load_credentials(tmp_path / "does_not_exist.cnf", "noxdb")
 
 
 def test_load_credentials_missing_section(tmp_path):
     cnf = _write_cnf(tmp_path / "my.cnf", "[client]\nuser=x\npassword=y\n")
-    with pytest.raises(RuntimeError, match=r"\[labdb\] not found"):
-        _load_credentials(cnf, "labdb")
+    with pytest.raises(RuntimeError, match=r"\[noxdb\] not found"):
+        _load_credentials(cnf, "noxdb")
 
 
 @pytest.mark.parametrize("missing", ["user", "password"])
 def test_load_credentials_missing_required_key(tmp_path, missing):
     keep = "password=y" if missing == "user" else "user=x"
-    cnf = _write_cnf(tmp_path / "my.cnf", f"[labdb]\n{keep}\n")
+    cnf = _write_cnf(tmp_path / "my.cnf", f"[noxdb]\n{keep}\n")
     with pytest.raises(RuntimeError, match=f"Missing required key {missing!r}"):
-        _load_credentials(cnf, "labdb")
+        _load_credentials(cnf, "noxdb")
 
 
 def test_load_credentials_custom_section(tmp_path):
@@ -96,10 +96,10 @@ def test_load_credentials_custom_section(tmp_path):
 def test_resolve_explicit_overrides_win(tmp_path):
     cnf = _write_cnf(
         tmp_path / "my.cnf",
-        "[labdb]\nhost=file_host\nuser=file_user\npassword=file_pw\ndatabase=file_db\n",
+        "[noxdb]\nhost=file_host\nuser=file_user\npassword=file_pw\ndatabase=file_db\n",
     )
     creds = _resolve_credentials(
-        cnf, "labdb",
+        cnf, "noxdb",
         {"host": "explicit_host", "port": None, "user": None,
          "password": None, "database": "explicit_db"},
     )
@@ -109,20 +109,20 @@ def test_resolve_explicit_overrides_win(tmp_path):
 
 
 def test_resolve_env_var_database(monkeypatch, tmp_path):
-    monkeypatch.setenv("LABDB_DATABASE", "env_db")
+    monkeypatch.setenv("NOXDB_DATABASE", "env_db")
     cnf = _write_cnf(
         tmp_path / "my.cnf",
-        "[labdb]\nuser=u\npassword=p\ndatabase=file_db\n",
+        "[noxdb]\nuser=u\npassword=p\ndatabase=file_db\n",
     )
-    creds = _resolve_credentials(cnf, "labdb", _empty_overrides())
+    creds = _resolve_credentials(cnf, "noxdb", _empty_overrides())
     assert creds["database"] == "env_db"
 
 
 def test_resolve_explicit_database_beats_env_var(monkeypatch, tmp_path):
-    monkeypatch.setenv("LABDB_DATABASE", "env_db")
-    cnf = _write_cnf(tmp_path / "my.cnf", "[labdb]\nuser=u\npassword=p\n")
+    monkeypatch.setenv("NOXDB_DATABASE", "env_db")
+    cnf = _write_cnf(tmp_path / "my.cnf", "[noxdb]\nuser=u\npassword=p\n")
     creds = _resolve_credentials(
-        cnf, "labdb",
+        cnf, "noxdb",
         {**_empty_overrides(), "database": "explicit_db"},
     )
     assert creds["database"] == "explicit_db"
@@ -130,7 +130,7 @@ def test_resolve_explicit_database_beats_env_var(monkeypatch, tmp_path):
 
 def test_resolve_no_config_path_uses_overrides_only():
     creds = _resolve_credentials(
-        None, "labdb",
+        None, "noxdb",
         {"host": "h", "port": 1234, "user": "u", "password": "p", "database": "d"},
     )
     assert creds == {"host": "h", "port": 1234, "user": "u",
@@ -140,7 +140,7 @@ def test_resolve_no_config_path_uses_overrides_only():
 def test_resolve_no_config_path_missing_required_raises():
     with pytest.raises(RuntimeError, match="'user' is missing"):
         _resolve_credentials(
-            None, "labdb",
+            None, "noxdb",
             {"host": "h", "port": None, "user": None,
              "password": "p", "database": None},
         )
@@ -173,7 +173,7 @@ def test_init_pool_raises_when_already_initialized(monkeypatch):
 
 def _read_audit_log() -> str:
     """Flush handlers and read the configured audit log file."""
-    log_path = Path(os.environ["LABDB_AUDIT_LOG"])
+    log_path = Path(os.environ["NOXDB_AUDIT_LOG"])
     for handler in conn_mod._logger.handlers:
         handler.flush()
     return log_path.read_text(encoding="utf-8") if log_path.exists() else ""
@@ -213,7 +213,7 @@ def test_log_if_write_truncates_long_query():
 
 def test_audit_log_writes_to_configured_path(tmp_path, monkeypatch):
     log_path = tmp_path / "subdir" / "audit.log"
-    monkeypatch.setenv("LABDB_AUDIT_LOG", str(log_path))
+    monkeypatch.setenv("NOXDB_AUDIT_LOG", str(log_path))
     # Detach handlers configured by the autouse fixture so the new env var
     # takes effect on next setup.
     for handler in list(conn_mod._logger.handlers):

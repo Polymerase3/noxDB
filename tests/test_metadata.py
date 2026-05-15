@@ -1,4 +1,4 @@
-"""Tests for dbmaria_utils.metadata.
+"""Tests for noxdb.metadata.
 
 Two tiers:
 
@@ -15,8 +15,8 @@ from decimal import Decimal
 import mariadb
 import pytest
 
-from dbmaria_utils import metadata, projects, samples, subjects, transaction, visits
-from dbmaria_utils.metadata import _eav_split, _row_to_value
+from noxdb import metadata, projects, samples, subjects, transaction, visits
+from noxdb.metadata import _eav_split, _row_to_value
 
 from tests._helpers import wipe_all
 

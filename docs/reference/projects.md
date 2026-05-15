@@ -1,3 +1,3 @@
 # `projects`
 
-::: dbmaria_utils.projects
+::: noxdb.projects

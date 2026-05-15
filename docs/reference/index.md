@@ -1,7 +1,7 @@
 # API reference
 
 Every page below is auto-generated from the docstrings in
-`src/dbmaria_utils/` by [mkdocstrings](https://mkdocstrings.github.io/).
+`src/noxdb/` by [mkdocstrings](https://mkdocstrings.github.io/).
 
 ## Modules
 
@@ -23,9 +23,9 @@ Every page below is auto-generated from the docstrings in
 
 - All CRUD functions take a cursor as their first argument — the
   caller controls the transaction boundary via
-  [`transaction()`][dbmaria_utils.connection.transaction].
+  [`transaction()`][noxdb.connection.transaction].
 - Single-row reads return `dict[str, Any] | None`; collection reads
   return `list[dict[str, Any]]`.
 - `set_*` upserts return `"inserted" | "updated" | "unchanged"`.
 - Writes go through `_LoggingCursor`, which audits to
-  `~/.labdb/audit.log` (override via `LABDB_AUDIT_LOG`).
+  `~/.noxdb/audit.log` (override via `NOXDB_AUDIT_LOG`).

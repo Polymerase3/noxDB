@@ -26,7 +26,7 @@ SSH gateway first.
 Nothing else is needed:
 
 ```python
-from dbmaria_utils import init_pool, close_pool
+from noxdb import init_pool, close_pool
 
 init_pool()
 # ... your queries ...
@@ -41,10 +41,10 @@ local port-forwarding tunnel through the SSH gateway first, then tell
 
 #### Step 1 — Add `local_port` to `~/.my.cnf`
 
-In the `[labdb-ssh]` section, add the local port the tunnel will bind to:
+In the `[noxdb-ssh]` section, add the local port the tunnel will bind to:
 
 ```ini
-[labdb-ssh]
+[noxdb-ssh]
 ssh_host = ccr-lab.lisc.univie.ac.at
 ssh_user = youruser
 local_port = 3307
@@ -60,7 +60,7 @@ Run this in your terminal before starting any Python session:
 ssh -f -N -L 3307:<host>:3306 youruser@ccr-lab.lisc.univie.ac.at
 ```
 
-Replace `<host>` with the value of `host` from the `[labdb]` section of your
+Replace `<host>` with the value of `host` from the `[noxdb]` section of your
 `~/.my.cnf`. The `-f` flag backgrounds the process; `-N` means no remote
 command is run — the tunnel just stays open.
 
@@ -81,7 +81,7 @@ If the output is empty, the tunnel is not running. Re-run the `ssh` command.
 #### Step 4 — Connect from Python
 
 ```python
-from dbmaria_utils import init_pool, close_pool
+from noxdb import init_pool, close_pool
 
 init_pool()   # detects 127.0.0.1:3307 is listening and connects through it
 # ... your queries ...
@@ -104,7 +104,7 @@ pkill -f "L 3307:<host>:3306"
 ## 2. Listing all projects
 
 ```python
-from dbmaria_utils import projects, transaction
+from noxdb import projects, transaction
 
 with transaction() as cur:
     proj_list = projects.list_all(cur)
@@ -130,7 +130,7 @@ with transaction() as cur:
 ## 3. Project summary
 
 ```python
-from dbmaria_utils import queries
+from noxdb import queries
 
 with transaction() as cur:
     summary = queries.project_summary(cur, project_id=7)
@@ -207,7 +207,7 @@ with transaction() as cur:
 ## 5. Subjects
 
 ```python
-from dbmaria_utils import subjects
+from noxdb import subjects
 
 with transaction() as cur:
     subj_list = subjects.list_for_project(cur, project_id=7)
@@ -251,7 +251,7 @@ with transaction() as cur:
 ## 7. Sample detail
 
 ```python
-from dbmaria_utils import samples
+from noxdb import samples
 
 with transaction() as cur:
     s = samples.get(cur, sample_id=649)
