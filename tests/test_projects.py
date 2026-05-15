@@ -1,11 +1,11 @@
-"""Integration tests for dbmaria_utils.projects (require a live MariaDB)."""
+"""Integration tests for noxdb.projects (require a live MariaDB)."""
 
 from __future__ import annotations
 
 import mariadb
 import pytest
 
-from dbmaria_utils import projects, transaction
+from noxdb import projects, transaction
 
 from tests._helpers import wipe_all
 

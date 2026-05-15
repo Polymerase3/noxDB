@@ -7,7 +7,7 @@ Natural key is the composite ``(subject_id, timepoint)`` — but
 ``timepoint`` is nullable, and MariaDB's UNIQUE treats NULLs as
 distinct, so multiple rows with ``timepoint IS NULL`` for the same
 subject are permitted by the schema.
-[`get_or_create`][dbmaria_utils.visits.get_or_create] rejects
+[`get_or_create`][noxdb.visits.get_or_create] rejects
 ``timepoint=None`` for that reason.
 """
 

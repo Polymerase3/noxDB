@@ -60,8 +60,8 @@ def coerce_metadata_value(raw: str) -> Any | None:
         The coerced value, or ``None`` for empty / whitespace-only
         cells (meaning "no metadata entry" — the caller should skip
         the row rather than insert NULL, because
-        [`metadata.set_visit`][dbmaria_utils.metadata.set_visit] /
-        [`metadata.set_sample`][dbmaria_utils.metadata.set_sample]
+        [`metadata.set_visit`][noxdb.metadata.set_visit] /
+        [`metadata.set_sample`][noxdb.metadata.set_sample]
         reject ``None``).
     """
     if raw is None:

@@ -1,3 +1,3 @@
 # `visits`
 
-::: dbmaria_utils.visits
+::: noxdb.visits

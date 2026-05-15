@@ -1,4 +1,4 @@
-"""Integration tests for dbmaria_utils.workflows (require a live MariaDB).
+"""Integration tests for noxdb.workflows (require a live MariaDB).
 
 Workflows must be atomic — a failure partway through must roll back every
 prior write in the same call. Tests cover both standalone usage (workflow
@@ -6,7 +6,7 @@ owns the transaction) and composed usage (caller-provided cursor).
 
 ``sample_files`` rows go through :func:`files.register` for the happy path,
 so we create a real on-disk file under a temp directory and point
-``LABDB_ARCHIVE_ROOT`` / ``LABDB_WORK_ROOT`` at it via monkeypatch.
+``NOXDB_ARCHIVE_ROOT`` / ``NOXDB_WORK_ROOT`` at it via monkeypatch.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from __future__ import annotations
 import mariadb
 import pytest
 
-from dbmaria_utils import (
+from noxdb import (
     execute,
     files,
     metadata,
@@ -51,8 +51,8 @@ def fake_tier_roots(tmp_path, monkeypatch):
     work = tmp_path / "work"
     archive.mkdir()
     work.mkdir()
-    monkeypatch.setenv("LABDB_ARCHIVE_ROOT", str(archive))
-    monkeypatch.setenv("LABDB_WORK_ROOT", str(work))
+    monkeypatch.setenv("NOXDB_ARCHIVE_ROOT", str(archive))
+    monkeypatch.setenv("NOXDB_WORK_ROOT", str(work))
     return archive, work
 
 

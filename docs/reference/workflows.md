@@ -1,3 +1,3 @@
 # `workflows`
 
-::: dbmaria_utils.workflows
+::: noxdb.workflows

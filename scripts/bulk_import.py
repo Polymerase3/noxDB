@@ -38,8 +38,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from dbmaria_utils._import import schema as _schema
-from dbmaria_utils._import.loader import (
+from noxdb._import import schema as _schema
+from noxdb._import.loader import (
     FileRow,
     ProjectBundle,
     ProjectMeta,
@@ -47,7 +47,7 @@ from dbmaria_utils._import.loader import (
     SubjectRow,
     VisitRow,
 )
-from dbmaria_utils._import.runner import (
+from noxdb._import.runner import (
     ImportReport,
     _commit,
     _validate_db_collisions,
@@ -56,8 +56,8 @@ from dbmaria_utils._import.runner import (
     _validate_schema,
     _write_log,
 )
-from dbmaria_utils import projects as projects_mod
-from dbmaria_utils.connection import close_pool, init_pool, transaction
+from noxdb import projects as projects_mod
+from noxdb.connection import close_pool, init_pool, transaction
 
 
 # --------------------------------------------------------------------------- #
@@ -345,7 +345,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--skip-disk-check", action="store_true",
                    help="Skip on-disk existence check for manifest file paths.")
     p.add_argument("--log-dir", type=Path, default=None,
-                   help="Directory for per-project JSON report logs (default: ~/.labdb/imports/).")
+                   help="Directory for per-project JSON report logs (default: ~/.noxdb/imports/).")
     return p.parse_args(argv)
 
 

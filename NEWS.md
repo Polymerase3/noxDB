@@ -10,6 +10,30 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-15
+
+### Added
+- `docs/quickstart.md` section 14: full `fetch` module example with live
+  output — project structure (`projects.get`, `project_summary`), file
+  manifest (`files_for_project`), and `fetch.export_project` producing a
+  local folder with `metadata.csv` and `README.txt`. Also shows the
+  `include_files=True` / `layout` / `file_types` path for on-LiSC use.
+- `docs/data-preparation.md`: new data-preparation section covering how
+  raw exports are transformed before import.
+
+### Changed
+- `docs/schema.md` fully rewritten: every table now has a complete
+  column-by-column reference (type, nullability, constraints). Controls
+  design documented in a dedicated section — mockIP, anchor, NC, and input
+  each live in their own project (ids 61, 64, 67, 58 respectively) and are
+  linked back to study projects via the `SQR`/`SQRP` plate coordinates.
+  Nullable `sex`/`age` and the `NC` ENUM addition from migration `002` are
+  called out inline. Previously wrong column names (`meta_key` → `key_name`,
+  `value_float` → `value_numeric`) corrected.
+- `docs/cli.md` removed; CLI is no longer part of the package.
+- `mkdocs.yml` updated to reflect the new documentation structure.
+- DB renamed to `noxDB`.
+
 ## [0.4.5] - 2026-05-15
 
 ### Added
@@ -98,7 +122,7 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 ## [0.4.1] - 2026-05-11
 
 ### Changed
-- Converted all public docstrings in `dbmaria_utils` (`connection`,
+- Converted all public docstrings in `noxdb` (`connection`,
   `projects`, `subjects`, `visits`, `samples`, `metadata`, `files`,
   `queries`, `workflows`, `fetch`) and the `_import` subpackage to
   Google style with explicit `Args:` / `Returns:` / `Raises:` sections.
@@ -135,7 +159,7 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 - Master import: load a whole project folder (`project.yaml`,
   `subjects.csv`, `visits.csv`, `samples.csv`, `files/manifest.csv`)
   into the database in one atomic transaction.
-  - `dbmaria_utils._import.import_project_from_dir(root, *, dry_run,
+  - `noxdb._import.import_project_from_dir(root, *, dry_run,
     force, compute_md5, skip_disk_check, log_dir)` is the library entry
     point; it raises `ProjectImportError` with an exhaustive list of
     collected errors when validation fails.
@@ -162,7 +186,7 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
     XLSX (requires `pandas`, plus `openpyxl` for `xlsx`).
   - `download_files_for_project` — copy every registered file for a
     project into a target directory. Uses paramiko SFTP when an
-    `ssh_host` is configured (via `~/.my.cnf [labdb-ssh]`, `LABDB_SSH_*`
+    `ssh_host` is configured (via `~/.my.cnf [noxdb-ssh]`, `NOXDB_SSH_*`
     env vars, or kwargs), and falls back to `shutil.copyfile` when
     running on LiSC with the storage mounted locally. Supports
     `by_sample`, `by_type`, and `flat` output layouts; resumes by
@@ -201,7 +225,7 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 ## [0.2.1] - 2026-05-11
 
 ### Added
-- Composite read-only `queries` module in `dbmaria_utils`:
+- Composite read-only `queries` module in `noxdb`:
   - `samples_for_project` — join `projects → subjects → visits → samples`
     with optional filters on `file_type`, `sample_type`, and `has_files`.
   - `samples_with_metadata` / `project_tidy_table` — EAV pivot from
@@ -216,7 +240,7 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
   - `find_db_files_missing_on_disk` — DB rows whose `file_path` is gone
     from disk; suitable for a cron sweep.
   - `find_disk_files_missing_in_db` — regular files under
-    `LABDB_ARCHIVE_ROOT` / `LABDB_WORK_ROOT` (or caller-provided roots)
+    `NOXDB_ARCHIVE_ROOT` / `NOXDB_WORK_ROOT` (or caller-provided roots)
     that are not registered in `sample_files`.
   - `integrity_check` — per-project report covering samples without files,
     archive files without MD5, and files outside their tier root.
@@ -227,7 +251,7 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 ## [0.2.0] - 2026-05-09
 
 ### Added
-- Per-table CRUD modules in `dbmaria_utils`:
+- Per-table CRUD modules in `noxdb`:
   - `projects` — `create`, `get`, `get_by_name`, `get_or_create`, `list_all`,
     `update`, `delete`, `exists` (id/name XOR), `count`.
   - `subjects` — same shape keyed on the composite `(project_id,
@@ -249,14 +273,14 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
     optional chunked MD5 (`compute_md5`) or caller-supplied checksum,
     `register`, `get_or_register` (idempotent on `file_path` and
     UNIQUE-violation race-safe), `restat`, plus the standard CRUD
-    helpers. Roots configurable via `LABDB_ARCHIVE_ROOT` /
-    `LABDB_WORK_ROOT` (defaults `/lisc/archive`, `/lisc/work`).
+    helpers. Roots configurable via `NOXDB_ARCHIVE_ROOT` /
+    `NOXDB_WORK_ROOT` (defaults `/lisc/archive`, `/lisc/work`).
   - `update(storage_tier=…)` enforces the same `file_type → tier`
     invariant as `register()` — flipping `archive` ↔ `work` is rejected;
     `scratch` / `external` overrides are still allowed.
 
 ### Changed
-- CI now runs `pytest --cov` against `src/dbmaria_utils` (branch
+- CI now runs `pytest --cov` against `src/noxdb` (branch
   coverage), prints a missing-lines report in the workflow log, and
   uploads `coverage.xml` as a build artifact. `pytest-cov` is a new
   optional `test` dependency; coverage settings live under
@@ -286,15 +310,15 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
   `sample_metadata`) and `sample_files` for tracking file pointers.
 - User and role definitions in `users/users.sql` (admin / read-write /
   read-only tiers, restricted to `lisc.%` hosts).
-- `dbmaria_utils` Python package with:
+- `noxdb` Python package with:
   - Connection pool (`init_pool`, `close_pool`, `get_connection`).
   - `transaction()` context manager with audit-logging cursor wrapper.
   - `execute()` helper returning rows as `list[dict]`.
-  - Audit log of write statements at `~/.labdb/audit.log` (override via
-    `LABDB_AUDIT_LOG`).
-  - Credentials read from `~/.my.cnf` `[labdb]` section by default;
+  - Audit log of write statements at `~/.noxdb/audit.log` (override via
+    `NOXDB_AUDIT_LOG`).
+  - Credentials read from `~/.my.cnf` `[noxdb]` section by default;
     overridable per-call via `init_pool(...)` keyword arguments and via the
-    `LABDB_DATABASE` env var.
+    `NOXDB_DATABASE` env var.
 - Fake-data seed script (`seed/load_fake_data.py`) covering all four EAV
   value types and a longitudinal subject example.
 - CI workflow running pytest against MariaDB 10.11.

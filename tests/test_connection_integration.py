@@ -1,10 +1,10 @@
-"""Integration tests for dbmaria_utils.connection (require a live MariaDB)."""
+"""Integration tests for noxdb.connection (require a live MariaDB)."""
 
 from __future__ import annotations
 
 import pytest
 
-from dbmaria_utils import execute, get_connection, transaction
+from noxdb import execute, get_connection, transaction
 
 
 @pytest.fixture

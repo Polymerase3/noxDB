@@ -4,7 +4,7 @@ Each workflow takes an *optional* cursor (``cur=None``). When the caller
 provides a cursor, the workflow piggybacks on the caller's transaction —
 all writes are part of the same atomic unit, and a later exception in
 the caller's block rolls them back. When ``cur`` is ``None``, the
-workflow opens its own :func:`dbmaria_utils.transaction` block, so the
+workflow opens its own :func:`noxdb.transaction` block, so the
 multi-step operation is still atomic when called standalone (e.g. from a
 notebook):
 
@@ -28,8 +28,8 @@ from __future__ import annotations
 from contextlib import nullcontext
 from typing import Any
 
-from dbmaria_utils import files, metadata, samples, subjects, visits
-from dbmaria_utils.connection import transaction
+from noxdb import files, metadata, samples, subjects, visits
+from noxdb.connection import transaction
 
 
 # --------------------------------------------------------------------------- #
@@ -67,8 +67,8 @@ def register_subject_with_visit(
 ) -> tuple[int, int]:
     """Idempotently create a subject and its first visit. Atomic.
 
-    Uses [`subjects.get_or_create`][dbmaria_utils.subjects.get_or_create]
-    and [`visits.get_or_create`][dbmaria_utils.visits.get_or_create], so
+    Uses [`subjects.get_or_create`][noxdb.subjects.get_or_create]
+    and [`visits.get_or_create`][noxdb.visits.get_or_create], so
     re-running with the same natural keys yields the same IDs without
     duplicating rows. Existing rows are NOT updated by this helper —
     call the CRUD ``update`` directly to change attributes of a row
@@ -87,7 +87,7 @@ def register_subject_with_visit(
         group_test: Used only when inserting a new visit.
         age: Used only when inserting a new visit.
         visit_metadata: Optional ``{key: value}`` upserted via
-            [`metadata.set_visit`][dbmaria_utils.metadata.set_visit].
+            [`metadata.set_visit`][noxdb.metadata.set_visit].
             Values must be ``int`` / ``float`` / ``bool`` / ``str``;
             ``None`` values raise.
 
@@ -128,12 +128,12 @@ def register_sample_with_files(
     """Idempotently create a sample, its metadata, and its files. Atomic.
 
     The sample is upserted via
-    [`samples.get_or_create`][dbmaria_utils.samples.get_or_create] keyed
+    [`samples.get_or_create`][noxdb.samples.get_or_create] keyed
     on the globally-UNIQUE ``sample_name``; existing samples keep their
     original ``visit_id`` even when called with a different one.
 
     Any disk/path validation error from
-    [`files`][dbmaria_utils.files] is raised inside the transaction,
+    [`files`][noxdb.files] is raised inside the transaction,
     which rolls back the sample insert too — the unit is the
     sample-plus-files bundle.
 
@@ -142,16 +142,16 @@ def register_sample_with_files(
             workflow opens its own transaction.
         visit_id: Parent visit (used only when inserting a new sample).
         sample_name: Globally unique sample name.
-        sample_type: See [`samples.create`][dbmaria_utils.samples.create]
+        sample_type: See [`samples.create`][noxdb.samples.create]
             for allowed values. Used only on insert.
         sqr: Used only on insert.
         sqrp: Used only on insert.
         library: Used only on insert.
         antibody_class: Used only on insert.
         sample_metadata: Optional ``{key: value}`` upserted via
-            [`metadata.set_sample`][dbmaria_utils.metadata.set_sample].
+            [`metadata.set_sample`][noxdb.metadata.set_sample].
         files_spec: Optional list of dicts forwarded to
-            [`files.get_or_register`][dbmaria_utils.files.get_or_register].
+            [`files.get_or_register`][noxdb.files.get_or_register].
             Recognised keys per entry: ``file_path`` (required),
             ``file_type`` (required), ``storage_tier``,
             ``checksum_md5``, ``compute_md5`` (falls back to the

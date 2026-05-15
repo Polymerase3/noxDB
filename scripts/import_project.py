@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""CLI entry point: import a project folder into dbmaria_project.
+"""CLI entry point: import a project folder into ccr_metadata.
 
     python scripts/import_project.py /path/to/project_X [--dry-run] [--force]
 
@@ -16,13 +16,13 @@ import json
 import sys
 from pathlib import Path
 
-from dbmaria_utils._import import ProjectImportError, import_project_from_dir
+from noxdb._import import ProjectImportError, import_project_from_dir
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="import_project",
-        description="Import a project folder (project.yaml + CSVs) into dbmaria_project.",
+        description="Import a project folder (project.yaml + CSVs) into ccr_metadata.",
     )
     p.add_argument("project_dir", type=Path, help="Path to the project folder.")
     p.add_argument(
@@ -46,7 +46,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         "--log-dir", type=Path, default=None,
-        help="Directory to write the JSON report log (default: ~/.labdb/imports).",
+        help="Directory to write the JSON report log (default: ~/.noxdb/imports).",
     )
     return p.parse_args(argv)
 

@@ -1,4 +1,4 @@
-"""Tests for dbmaria_utils.files.
+"""Tests for noxdb.files.
 
 Two tiers, like ``test_metadata.py``:
 
@@ -16,10 +16,10 @@ import os
 import mariadb
 import pytest
 
-from dbmaria_utils import files, projects, samples, subjects, transaction, visits
+from noxdb import files, projects, samples, subjects, transaction, visits
 
 from tests._helpers import wipe_all
-from dbmaria_utils.files import (
+from noxdb.files import (
     _compute_md5,
     _expected_tier,
     _resolve_tier,
@@ -192,8 +192,8 @@ def roots(monkeypatch, tmp_path):
     wrk = tmp_path / "work"
     arc.mkdir()
     wrk.mkdir()
-    monkeypatch.setenv("LABDB_ARCHIVE_ROOT", str(arc))
-    monkeypatch.setenv("LABDB_WORK_ROOT", str(wrk))
+    monkeypatch.setenv("NOXDB_ARCHIVE_ROOT", str(arc))
+    monkeypatch.setenv("NOXDB_WORK_ROOT", str(wrk))
     return arc, wrk
 
 

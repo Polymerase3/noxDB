@@ -1,6 +1,6 @@
-# Contributing to phiper-db
+# Contributing to noxdb
 
-Thanks for working on `phiper-db`. This document is the short version of
+Thanks for working on `noxdb`. This document is the short version of
 "how to make a change that will pass review and CI."
 
 ## Ground rules
@@ -58,7 +58,7 @@ Run the full suite against a real MariaDB before pushing:
 
 ```bash
 DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_PASSWORD=rootpw \
-DB_NAME=dbmaria_project_test pytest -v
+DB_NAME=ccr_metadata_test pytest -v
 ```
 
 See [`docs/testing.md`](docs/testing.md) for the Docker recipe. The CI
@@ -88,7 +88,7 @@ def get_or_create(cur, project_name: str, **kwargs) -> int:
 ```
 
 The first line is a one-sentence summary. Cross-references to other
-functions render automatically — just write `[get][dbmaria_utils.projects.get]`
+functions render automatically — just write `[get][noxdb.projects.get]`
 in narrative paragraphs.
 
 ## Docs

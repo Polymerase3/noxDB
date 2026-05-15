@@ -1,3 +1,3 @@
 # `metadata`
 
-::: dbmaria_utils.metadata
+::: noxdb.metadata

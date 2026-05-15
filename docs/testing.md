@@ -38,24 +38,24 @@ The fixture reads connection settings from environment variables. Put them
 on a single line — multi-line `\`-continuations are easy to break in zsh:
 
 ```bash
-DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_PASSWORD=rootpw DB_NAME=dbmaria_project pytest -v
+DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_PASSWORD=rootpw DB_NAME=ccr_metadata pytest -v
 ```
 
 Or export once for the shell session:
 
 ```bash
-export DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_PASSWORD=rootpw DB_NAME=dbmaria_project
+export DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_PASSWORD=rootpw DB_NAME=ccr_metadata
 pytest -v
 ```
 
 ## Notes and warnings
 
-- The session fixture **drops and recreates** `dbmaria_project` on every
+- The session fixture **drops and recreates** `ccr_metadata` on every
   run. Do not point `DB_NAME` at a database you care about. To be safe
   against an existing local DB, use a separate name:
 
   ```bash
-  DB_NAME=dbmaria_project_test pytest -v
+  DB_NAME=ccr_metadata_test pytest -v
   ```
 
 - If you see `Access denied ... (using password: NO)`, the env vars did not

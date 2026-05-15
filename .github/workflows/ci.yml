@@ -27,7 +27,7 @@ jobs:
       DB_PORT: 3306
       DB_USER: root
       DB_PASSWORD: rootpw
-      DB_NAME: dbmaria_project
+      DB_NAME: ccr_metadata
 
     steps:
       - uses: actions/checkout@v4

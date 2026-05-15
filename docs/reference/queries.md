@@ -1,3 +1,3 @@
 # `queries`
 
-::: dbmaria_utils.queries
+::: noxdb.queries

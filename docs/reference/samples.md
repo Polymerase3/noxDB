@@ -1,3 +1,3 @@
 # `samples`
 
-::: dbmaria_utils.samples
+::: noxdb.samples

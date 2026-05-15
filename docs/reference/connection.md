@@ -1,3 +1,3 @@
 # `connection`
 
-::: dbmaria_utils.connection
+::: noxdb.connection

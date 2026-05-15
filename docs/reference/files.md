@@ -1,3 +1,3 @@
 # `files`
 
-::: dbmaria_utils.files
+::: noxdb.files

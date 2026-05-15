@@ -1,6 +1,6 @@
-"""Python tooling for dbmaria_project."""
+"""Python tooling for ccr_metadata."""
 
-from dbmaria_utils import (
+from noxdb import (
     fetch,
     files,
     metadata,
@@ -11,7 +11,7 @@ from dbmaria_utils import (
     visits,
     workflows,
 )
-from dbmaria_utils.connection import (
+from noxdb.connection import (
     close_pool,
     execute,
     get_connection,

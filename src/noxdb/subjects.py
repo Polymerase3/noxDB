@@ -1,13 +1,13 @@
 """CRUD wrapper for the `subjects` table.
 
-Same call style as [`dbmaria_utils.projects`][dbmaria_utils.projects] —
+Same call style as [`noxdb.projects`][noxdb.projects] —
 every function takes a cursor first; callers wrap them in
 ``with transaction() as cur:``.
 
 The natural key is the composite ``(project_id, subject_code)`` — a
 ``subject_code`` can repeat across projects, so most lookups go through
-[`get_by_code`][dbmaria_utils.subjects.get_by_code] rather than
-[`get`][dbmaria_utils.subjects.get].
+[`get_by_code`][noxdb.subjects.get_by_code] rather than
+[`get`][noxdb.subjects.get].
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def create(
         mariadb.IntegrityError: If ``(project_id, subject_code)`` already
             exists, ``project_id`` does not reference an existing
             project, or ``sex`` is a non-null value outside ``('M', 'F')``.
-            Use [`get_or_create`][dbmaria_utils.subjects.get_or_create]
+            Use [`get_or_create`][noxdb.subjects.get_or_create]
             for idempotent inserts.
     """
     cur.execute(

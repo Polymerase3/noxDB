@@ -58,13 +58,13 @@ The Python `mariadb` driver is not pure Python — it compiles against your syst
 **Clone the repository** from GitHub. Open a terminal, navigate to wherever you keep your code, and run:
 
 ```bash
-git clone https://github.com/Polymerase3/phiper-db.git
+git clone https://github.com/Polymerase3/noxdb.git
 ```
 
-This creates a `phiper-db/` folder. Go into it:
+This creates a `noxdb/` folder. Go into it:
 
 ```bash
-cd phiper-db
+cd noxdb
 ```
 
 **Install the package and its dependencies.** We install it in "editable" mode (`-e`) so that any local changes you make are picked up immediately without reinstalling:
@@ -86,7 +86,7 @@ pip install -e ".[analysis]"
 
 ## Step 3 — Set up your database credentials
 
-Connection settings are stored in a plain-text config file called `~/.my.cnf` in your home directory. The library reads the `[labdb]` section automatically every time it connects.
+Connection settings are stored in a plain-text config file called `~/.my.cnf` in your home directory. The library reads the `[noxdb]` section automatically every time it connects.
 
 **Create or open the file:**
 
@@ -101,12 +101,12 @@ notepad $HOME\.my.cnf
 **Add the following block** (replace the placeholders with the values you received from an admin):
 
 ```ini
-[labdb]
+[noxdb]
 host=<galera-internal-hostname>
 port=3306
 user=<your-db-username>
 password=<your-db-password>
-database=dbmaria_project
+database=ccr_metadata
 ```
 
 What each field means:
@@ -117,7 +117,7 @@ What each field means:
 | `port`     | Leave this as `3306` unless told otherwise                         |
 | `user`     | Your personal database username — provided by an admin             |
 | `password` | Your database password — provided by an admin                      |
-| `database` | Leave this as `dbmaria_project`                                    |
+| `database` | Leave this as `ccr_metadata`                                    |
 
 **Save the file**, then lock down its permissions so only you can read it:
 
@@ -132,10 +132,10 @@ chmod 600 ~/.my.cnf
 
 The database server lives on the LiSC internal network. If you are working from outside LiSC (e.g. from home), you cannot reach it directly. The library can automatically open an SSH tunnel through the lab's jump host (`ccr-lab.lisc.univie.ac.at`) — but you need to tell it how to log in there.
 
-**Add a second section** to the same `~/.my.cnf` file, directly below `[labdb]`:
+**Add a second section** to the same `~/.my.cnf` file, directly below `[noxdb]`:
 
 ```ini
-[labdb-ssh]
+[noxdb-ssh]
 ssh_host=ccr-lab.lisc.univie.ac.at
 ssh_user=<your-lisc-username>
 ssh_pkey=~/.ssh/id_ed25519
@@ -168,7 +168,7 @@ What each field means:
 Copy the script below into a file called `test_connection.py` and run it with `python test_connection.py`.
 
 ```python
-from dbmaria_utils.connection import init_pool
+from noxdb.connection import init_pool
 
 print("Connecting to the database...")
 try:
@@ -183,9 +183,9 @@ try:
 except Exception as e:
     print("Connection failed:", e)
     print("\nThings to check:")
-    print("  1. Is ~/.my.cnf present and does it have a [labdb] section?")
+    print("  1. Is ~/.my.cnf present and does it have a [noxdb] section?")
     print("  2. Are your host / user / password correct?")
-    print("  3. If working remotely, does ~/.my.cnf have a [labdb-ssh] section?")
+    print("  3. If working remotely, does ~/.my.cnf have a [noxdb-ssh] section?")
     print("  4. Can you SSH into ccr-lab.lisc.univie.ac.at manually?")
 ```
 

@@ -5,7 +5,7 @@ Run with the project venv:
 
 Prerequisites:
   - SSH gateway reachable (ccr-lab.lisc.univie.ac.at)
-  - ~/.my.cnf has [labdb] and [labdb-ssh] sections (local_port=3307 optional)
+  - ~/.my.cnf has [noxdb] and [noxdb-ssh] sections (local_port=3307 optional)
   - pip install -e ".[analysis]" done
 
 Steps covered: init_pool, projects, project_summary, samples_for_project,
@@ -28,8 +28,8 @@ pd.set_option("display.max_columns", 20)
 pd.set_option("display.width", 120)
 pd.set_option("display.max_colwidth", 30)
 
-from dbmaria_utils import init_pool, close_pool, transaction
-from dbmaria_utils import projects, subjects, visits, samples, queries
+from noxdb import init_pool, close_pool, transaction
+from noxdb import projects, subjects, visits, samples, queries
 
 def jsonable(obj):
     if isinstance(obj, (datetime, date)):
@@ -138,6 +138,25 @@ try:
         dft = queries.project_tidy_table(cur, first_pid)
         done(t, f"shape={dft.shape}")
         print(f"Columns: {list(dft.columns)}", flush=True)
+
+        # ── 11. controls_for_project ──────────────────────────────────────────
+        t = step(f"11. queries.controls_for_project(project_id={first_pid})")
+        dfc = queries.controls_for_project(cur, first_pid)
+        done(t, f"{len(dfc)} control rows")
+        if not dfc.empty:
+            print(dfc.groupby("sample_type").size().to_string(), flush=True)
+            print(dfc.head(3).to_string(index=False), flush=True)
+
+        t = step(f"11b. controls_for_project — mocks only")
+        dfc_mock = queries.controls_for_project(cur, first_pid, sample_types=["mockIP"])
+        done(t, f"{len(dfc_mock)} mockIP rows")
+
+        # ── 12. list_inputs ───────────────────────────────────────────────────
+        t = step("12. queries.list_inputs()")
+        dfi = queries.list_inputs(cur)
+        done(t, f"{len(dfi)} input rows")
+        if not dfi.empty:
+            print(dfi.head(3).to_string(index=False), flush=True)
 
 finally:
     close_pool()

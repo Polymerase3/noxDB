@@ -16,8 +16,8 @@ File-type → tier is fixed by lab convention:
 
 Roots are configurable via env vars (defaults shown):
 
-    LABDB_ARCHIVE_ROOT  default /lisc/archive
-    LABDB_WORK_ROOT     default /lisc/work
+    NOXDB_ARCHIVE_ROOT  default /lisc/archive
+    NOXDB_WORK_ROOT     default /lisc/work
 
 Callers can override ``storage_tier`` to ``'scratch'`` or ``'external'``
 (escape hatches with no path-prefix check); overriding to swap
@@ -64,11 +64,11 @@ _ORDERABLE = frozenset(_COLUMNS)
 # --------------------------------------------------------------------------- #
 
 def _archive_root() -> str:
-    return os.environ.get("LABDB_ARCHIVE_ROOT", "/lisc/archive")
+    return os.environ.get("NOXDB_ARCHIVE_ROOT", "/lisc/archive")
 
 
 def _work_root() -> str:
-    return os.environ.get("LABDB_WORK_ROOT", "/lisc/work")
+    return os.environ.get("NOXDB_WORK_ROOT", "/lisc/work")
 
 
 def _expected_tier(file_type: str) -> str:
@@ -323,13 +323,13 @@ def get_or_register(
     used to update the existing row. This means a stale path that was
     registered in the past keeps returning its id even if the file has
     since been deleted; call
-    [`restat`][dbmaria_utils.files.restat] if you need to refresh it.
+    [`restat`][noxdb.files.restat] if you need to refresh it.
 
     Args:
         cur: Audit-logging cursor from `transaction()`.
         sample_id: Parent sample (used only on insert).
         file_path: Absolute path on disk. Globally unique.
-        file_type: See [`register`][dbmaria_utils.files.register].
+        file_type: See [`register`][noxdb.files.register].
         compute_md5: Used only on insert.
         checksum_md5: Used only on insert.
         storage_tier: Used only on insert.
@@ -340,7 +340,7 @@ def get_or_register(
 
     Raises:
         mariadb.IntegrityError: If the race-recovery fetch also misses.
-        Plus everything [`register`][dbmaria_utils.files.register] raises
+        Plus everything [`register`][noxdb.files.register] raises
         on insert.
     """
     existing = get_by_path(cur, file_path)
@@ -450,11 +450,11 @@ def update(
     Only kwargs with non-None values are written. ``file_path``,
     ``file_type``, ``sample_id``, and ``created_at`` are NOT updatable
     — those describe a different file. Use
-    [`restat`][dbmaria_utils.files.restat] to refresh size/checksum from
+    [`restat`][noxdb.files.restat] to refresh size/checksum from
     disk after a file is rewritten in place.
 
     Updating ``storage_tier`` enforces the same `file_type → tier`
-    invariant as [`register`][dbmaria_utils.files.register]: flipping
+    invariant as [`register`][noxdb.files.register]: flipping
     ``archive`` ↔ ``work`` is rejected; ``scratch`` / ``external``
     overrides are allowed.
 

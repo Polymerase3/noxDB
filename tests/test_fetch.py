@@ -1,4 +1,4 @@
-"""Integration tests for dbmaria_utils.fetch (require a live MariaDB + pandas).
+"""Integration tests for noxdb.fetch (require a live MariaDB + pandas).
 
 The download tests exercise the local-copy path of the transport
 abstraction — no SSH is involved. SFTP-specific behavior is covered by
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from dbmaria_utils import (
+from noxdb import (
     fetch,
     metadata,
     projects,
@@ -128,7 +128,7 @@ def test_download_files_local_copy_all(project_with_local_files, tmp_path):
         project_id=pid,
         output_dir=out,
         config_path=None,
-        ssh_host="",  # explicit empty override beats any env LABDB_SSH_HOST
+        ssh_host="",  # explicit empty override beats any env NOXDB_SSH_HOST
     )
     assert len(report["downloaded"]) == 3
     assert report["failed"] == []

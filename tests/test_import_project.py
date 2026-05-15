@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from dbmaria_utils import (
+from noxdb import (
     execute,
     projects,
     transaction,
 )
-from dbmaria_utils._import import (
+from noxdb._import import (
     ProjectImportError,
     import_project_from_dir,
 )
@@ -74,7 +74,7 @@ def _build_project(tmp_path: Path, *, name: str, prefix: str) -> Path:
     the real LABDB tier roots, but the importer does not enforce tier
     policy (that's enforced by :func:`files.register`; the importer uses
     raw INSERTs... actually it uses files.get_or_register which DOES
-    validate). To avoid that, we point LABDB_ARCHIVE_ROOT / WORK_ROOT
+    validate). To avoid that, we point NOXDB_ARCHIVE_ROOT / WORK_ROOT
     at our tmp directories via monkeypatch in each test.
     """
     archive = tmp_path / "archive"
@@ -105,8 +105,8 @@ def fake_tier_roots(tmp_path, monkeypatch):
     work = tmp_path / "work"
     archive.mkdir(exist_ok=True)
     work.mkdir(exist_ok=True)
-    monkeypatch.setenv("LABDB_ARCHIVE_ROOT", str(archive))
-    monkeypatch.setenv("LABDB_WORK_ROOT", str(work))
+    monkeypatch.setenv("NOXDB_ARCHIVE_ROOT", str(archive))
+    monkeypatch.setenv("NOXDB_WORK_ROOT", str(work))
     return archive, work
 
 

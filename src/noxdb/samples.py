@@ -4,8 +4,8 @@ Same call style as the other table modules: cursor first, dict returns,
 writes audit-logged via ``_LoggingCursor``.
 
 ``sample_name`` is **globally unique** (not scoped to a visit), so the
-natural-key lookup is [`get_by_name`][dbmaria_utils.samples.get_by_name]
-and [`get_or_create`][dbmaria_utils.samples.get_or_create] keys on
+natural-key lookup is [`get_by_name`][noxdb.samples.get_by_name]
+and [`get_or_create`][noxdb.samples.get_or_create] keys on
 ``sample_name`` alone.
 """
 
@@ -127,7 +127,7 @@ def get_or_create(
         visit_id: Parent visit (used only on insert).
         sample_name: Globally unique sample name.
         sample_type: Used only on insert. See
-            [`create`][dbmaria_utils.samples.create] for allowed values.
+            [`create`][noxdb.samples.create] for allowed values.
         sqr: Used only on insert.
         sqrp: Used only on insert.
         library: Used only on insert.
@@ -231,7 +231,7 @@ def update(
         sample_id: Row to update.
         sample_name: New name (if not None).
         sample_type: New type (if not None). See
-            [`create`][dbmaria_utils.samples.create] for allowed values.
+            [`create`][noxdb.samples.create] for allowed values.
         sqr: New SQR (if not None).
         sqrp: New SQRP (if not None).
         library: New library (if not None).

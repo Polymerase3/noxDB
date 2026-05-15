@@ -3,7 +3,7 @@
 All functions take a cursor as the first argument so callers control the
 transaction boundary:
 
-    from dbmaria_utils import projects, transaction
+    from noxdb import projects, transaction
 
     with transaction() as cur:
         pid, created = projects.get_or_create(cur, "STUDY42", pi_name="Dr. Test")
@@ -48,7 +48,7 @@ def create(
 
     Raises:
         mariadb.IntegrityError: If ``project_name`` already exists. Use
-            [`get_or_create`][dbmaria_utils.projects.get_or_create] for
+            [`get_or_create`][noxdb.projects.get_or_create] for
             idempotent inserts.
     """
     cur.execute(

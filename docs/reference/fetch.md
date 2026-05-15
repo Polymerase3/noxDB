@@ -1,3 +1,3 @@
 # `fetch`
 
-::: dbmaria_utils.fetch
+::: noxdb.fetch
