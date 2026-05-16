@@ -107,6 +107,13 @@ def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
                 f"samples.csv row {r.row_num}: sample_type={r.sample_type!r} "
                 f"not in {sorted(schema.ALLOWED_SAMPLE_TYPE)}"
             )
+        for fld, val in (("sqr", r.sqr), ("sqrp", r.sqrp)):
+            try:
+                schema.validate_plate_id(
+                    val, field=f"samples.csv row {r.row_num}.{fld}"
+                )
+            except ValueError as exc:
+                errs.append(str(exc))
 
     for r in bundle.files:
         if r.file_type not in schema.ALLOWED_FILE_TYPE:
@@ -121,6 +128,30 @@ def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
             )
 
     return errs
+
+
+def _plate_warnings(bundle: loader.ProjectBundle) -> list[str]:
+    """Surface SQR/SQRP values that get normalized on the way in.
+
+    Canonicalization (whitespace strip, ``NA``/empty → ``""``) happens
+    silently in :func:`samples.create`; echoing it as an import warning
+    keeps the transformation visible in the report rather than a
+    surprise when SQR+SQRP linking later behaves on the canonical form.
+    Length-overflow is handled as a hard error in
+    :func:`_validate_schema`, so it is swallowed here.
+    """
+    warnings: list[str] = []
+    for r in bundle.samples:
+        for fld, val in (("sqr", r.sqr), ("sqrp", r.sqrp)):
+            try:
+                _canon, warn = schema.validate_plate_id(
+                    val, field=f"samples.csv row {r.row_num}.{fld}"
+                )
+            except ValueError:
+                continue
+            if warn is not None:
+                warnings.append(warn)
+    return warnings
 
 
 def _validate_referential(bundle: loader.ProjectBundle) -> list[str]:
@@ -196,11 +227,16 @@ def _validate_disk(bundle: loader.ProjectBundle) -> list[str]:
 
 
 def _validate_db_collisions(cur, bundle: loader.ProjectBundle) -> list[str]:
-    """Block on UNIQUE keys owned by OTHER projects.
+    """Block on the one remaining cross-project UNIQUE: ``file_path``.
 
-    The hierarchy has two cross-project UNIQUEs that can't be resolved by
-    ``get_or_create``: ``samples.sample_name`` and ``sample_files.file_path``.
-    If either collides with a row in a different project we refuse the
+    ``samples.sample_name`` is no longer treated as a cross-project
+    collision — samples are intentionally shared across projects via
+    ``project_samples`` (plate controls, shared HC cohorts). A sample
+    that already exists is simply re-linked to this project on commit.
+
+    ``sample_files.file_path`` is still globally UNIQUE: a file path
+    can only describe one physical artefact, so if it already belongs
+    to a different project that is a genuine conflict and we refuse the
     import even with ``--force``.
     """
     errs: list[str] = []
@@ -208,42 +244,25 @@ def _validate_db_collisions(cur, bundle: loader.ProjectBundle) -> list[str]:
     project_row = projects.get_by_name(cur, project_name)
     project_id = project_row["project_id"] if project_row else None
 
-    for r in bundle.samples:
-        existing = samples.get_by_name(cur, r.sample_name)
-        if existing is None:
-            continue
-        # Walk up to project_id.
-        cur.execute(
-            "SELECT s.project_id FROM samples sm "
-            "JOIN visits v ON v.visit_id = sm.visit_id "
-            "JOIN subjects s ON s.subject_id = v.subject_id "
-            "WHERE sm.sample_id = ?",
-            (existing["sample_id"],),
-        )
-        existing_pid = cur.fetchone()[0]
-        if existing_pid != project_id:
-            errs.append(
-                f"samples.csv row {r.row_num}: sample_name {r.sample_name!r} "
-                f"already belongs to project_id={existing_pid}"
-            )
-
     for r in bundle.files:
         existing = files_mod.get_by_path(cur, r.file_path)
         if existing is None:
             continue
+        # The file's sample may be linked to several projects via
+        # project_samples. It's a collision only if NONE of those
+        # projects is the one we're importing into.
         cur.execute(
-            "SELECT s.project_id FROM sample_files f "
-            "JOIN samples sm ON sm.sample_id = f.sample_id "
-            "JOIN visits v ON v.visit_id = sm.visit_id "
-            "JOIN subjects s ON s.subject_id = v.subject_id "
+            "SELECT ps.project_id FROM sample_files f "
+            "JOIN project_samples ps ON ps.sample_id = f.sample_id "
             "WHERE f.file_id = ?",
             (existing["file_id"],),
         )
-        existing_pid = cur.fetchone()[0]
-        if existing_pid != project_id:
+        existing_pids = {row[0] for row in cur.fetchall()}
+        if project_id not in existing_pids:
+            owners = ", ".join(str(p) for p in sorted(existing_pids)) or "none"
             errs.append(
                 f"manifest.csv row {r.row_num}: file_path {r.file_path!r} "
-                f"already belongs to project_id={existing_pid}"
+                f"already belongs to project_id={owners}"
             )
 
     return errs
@@ -262,6 +281,7 @@ def _commit(
         "subjects":   {"inserted": 0, "existing": 0},
         "visits":     {"inserted": 0, "existing": 0},
         "samples":    {"inserted": 0, "existing": 0},
+        "project_samples": {"linked": 0, "controls_linked": 0},
         "files":      {"inserted": 0, "existing": 0},
         "metadata":   {"inserted": 0, "updated": 0, "unchanged": 0},
     }
@@ -276,7 +296,7 @@ def _commit(
     subject_ids: dict[str, int] = {}
     for s in bundle.subjects:
         sid, created = subjects.get_or_create(
-            cur, pid, s.subject_code, s.sex, origin=s.origin,
+            cur, s.subject_code, s.sex, origin=s.origin,
         )
         subject_ids[s.subject_code] = sid
         counts["subjects"]["inserted" if created else "existing"] += 1
@@ -303,9 +323,37 @@ def _commit(
         )
         sample_ids[sm.sample_name] = sid
         counts["samples"]["inserted" if created else "existing"] += 1
+        # project_samples is the sole project↔sample link. Register
+        # every sample in this bundle under the imported project.
+        samples.link_to_project(cur, pid, sid)
+        counts["project_samples"]["linked"] += 1
         for key, val in sm.metadata.items():
             result = metadata.set_sample(cur, sid, key, val)
             counts["metadata"][result] += 1
+
+    # Auto-link plate controls: any control (mockIP/anchor/NC) that ran
+    # on the same SQR+SQRP plate as a real sample in this bundle is also
+    # linked to this project, so controls_for_project keeps working.
+    # Match on the canonical plate form — samples.create stored the
+    # canonical SQR/SQRP, so the WHERE keys must be canonical too.
+    sqr_sqrp = {
+        (
+            samples.canonical_plate_id(sm.sqr),
+            samples.canonical_plate_id(sm.sqrp),
+        )
+        for sm in bundle.samples
+        if sm.sample_type == "sample"
+    }
+    for sqr, sqrp in sqr_sqrp:
+        cur.execute(
+            "SELECT sample_id FROM samples "
+            "WHERE SQR = ? AND SQRP = ? "
+            "AND sample_type IN ('mockIP', 'anchor', 'NC')",
+            (sqr, sqrp),
+        )
+        for (ctrl_id,) in cur.fetchall():
+            samples.link_to_project(cur, pid, ctrl_id)
+            counts["project_samples"]["controls_linked"] += 1
 
     for f in bundle.files:
         fid, created = files_mod.get_or_register(
@@ -379,7 +427,7 @@ def import_project_from_dir(
         project_name=bundle.project.project_name,
         dry_run=dry_run,
         force=force,
-        warnings=list(bundle.warnings),
+        warnings=list(bundle.warnings) + _plate_warnings(bundle),
     )
 
     errors: list[str] = []
