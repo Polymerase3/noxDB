@@ -227,42 +227,40 @@ def _validate_disk(bundle: loader.ProjectBundle) -> list[str]:
 
 
 def _validate_db_collisions(cur, bundle: loader.ProjectBundle) -> list[str]:
-    """Block on the one remaining cross-project UNIQUE: ``file_path``.
+    """Block on the one remaining global UNIQUE that can't be resolved
+    by re-use: a ``file_path`` bound to a *different* sample.
 
-    ``samples.sample_name`` is no longer treated as a cross-project
-    collision — samples are intentionally shared across projects via
-    ``project_samples`` (plate controls, shared HC cohorts). A sample
-    that already exists is simply re-linked to this project on commit.
+    ``samples.sample_name`` is no longer a cross-project collision —
+    samples are intentionally shared across projects via
+    ``project_samples`` (plate controls, shared HC cohorts). An
+    existing sample is re-used (``get_or_create`` keys on the global
+    ``sample_name``) and merely linked to this project on commit.
 
-    ``sample_files.file_path`` is still globally UNIQUE: a file path
-    can only describe one physical artefact, so if it already belongs
-    to a different project that is a genuine conflict and we refuse the
-    import even with ``--force``.
+    ``sample_files.file_path`` is globally UNIQUE. Because samples are
+    shared, the same physical file legitimately reappears in another
+    project's bundle under the **same** ``sample_name`` — that is a
+    no-op re-use (``get_or_register`` keys on the path), NOT a
+    conflict. It is only a genuine integrity conflict when the path is
+    already registered to a *different* sample, since one path cannot
+    describe two samples. Project ownership is irrelevant now — only
+    sample identity matters.
     """
     errs: list[str] = []
-    project_name = bundle.project.project_name
-    project_row = projects.get_by_name(cur, project_name)
-    project_id = project_row["project_id"] if project_row else None
 
     for r in bundle.files:
         existing = files_mod.get_by_path(cur, r.file_path)
         if existing is None:
             continue
-        # The file's sample may be linked to several projects via
-        # project_samples. It's a collision only if NONE of those
-        # projects is the one we're importing into.
-        cur.execute(
-            "SELECT ps.project_id FROM sample_files f "
-            "JOIN project_samples ps ON ps.sample_id = f.sample_id "
-            "WHERE f.file_id = ?",
-            (existing["file_id"],),
+        existing_sample = samples.get(cur, existing["sample_id"])
+        existing_name = (
+            existing_sample["sample_name"] if existing_sample else None
         )
-        existing_pids = {row[0] for row in cur.fetchall()}
-        if project_id not in existing_pids:
-            owners = ", ".join(str(p) for p in sorted(existing_pids)) or "none"
+        if existing_name != r.sample_name:
             errs.append(
                 f"manifest.csv row {r.row_num}: file_path {r.file_path!r} "
-                f"already belongs to project_id={owners}"
+                f"already registered to a different sample "
+                f"({existing_name!r}); a file path cannot describe two "
+                f"samples"
             )
 
     return errs

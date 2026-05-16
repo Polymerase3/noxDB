@@ -294,8 +294,13 @@ def test_sample_name_shared_across_projects_is_linked(
         "CA_SA1,S_X,t0,sample,Q,Q,libA\n"
     )
     (proj_b / "files").mkdir()
+    # Re-list CA_SA1's EXISTING file (same sample_name + same path). This
+    # is the shared-cohort case (e.g. CART reusing IgAN samples): it must
+    # be a no-op re-use, not a file_path collision.
+    shared_file = tmp_path / "archive" / "CA_SA1_R1.fastq.gz"
     (proj_b / "files" / "manifest.csv").write_text(
         "sample_name,file_path,file_type\n"
+        f"CA_SA1,{shared_file},fastq_r1\n"
     )
     report_b = import_project_from_dir(
         proj_b, force=True, log_dir=tmp_path / "logs",
@@ -311,6 +316,48 @@ def test_sample_name_shared_across_projects_is_linked(
     )
     linked = {r["project_id"] for r in rows}
     assert linked == {report_a.project_id, report_b.project_id}
+
+    # The shared file was re-used, not duplicated.
+    dup = execute(
+        "SELECT COUNT(*) AS n FROM sample_files WHERE file_path = ?",
+        (str(shared_file),),
+    )
+    assert dup[0]["n"] == 1
+
+
+def test_file_path_bound_to_different_sample_errors(
+    tmp_path, clean_db, fake_tier_roots,
+):
+    """A file_path already registered to a *different* sample is a real
+    integrity conflict (one path cannot describe two samples) and is
+    refused even with force=True."""
+    proj_a = _build_project(tmp_path, name="COLL_A", prefix="CA")
+    import_project_from_dir(proj_a, log_dir=tmp_path / "logs")
+
+    proj_b = tmp_path / "coll_b2"
+    proj_b.mkdir()
+    (proj_b / "project.yaml").write_text(PROJECT_YAML.format(name="COLL_B2"))
+    (proj_b / "subjects.csv").write_text("subject_code,sex\nS_Y,F\n")
+    (proj_b / "visits.csv").write_text(
+        "subject_code,timepoint,group_test,age\nS_Y,t0,ctrl,20\n"
+    )
+    # NEW sample name, but it claims CA_SA1's existing file path.
+    (proj_b / "samples.csv").write_text(
+        "sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library\n"
+        "CB_OTHER,S_Y,t0,sample,Q,Q,libA\n"
+    )
+    stolen = tmp_path / "archive" / "CA_SA1_R1.fastq.gz"
+    (proj_b / "files").mkdir()
+    (proj_b / "files" / "manifest.csv").write_text(
+        "sample_name,file_path,file_type\n"
+        f"CB_OTHER,{stolen},fastq_r1\n"
+    )
+    with pytest.raises(ProjectImportError) as exc:
+        import_project_from_dir(proj_b, force=True, log_dir=tmp_path / "logs")
+    assert any(
+        "already registered to a different sample" in e
+        for e in exc.value.errors
+    )
 
 
 def test_missing_required_file(tmp_path, clean_db):
