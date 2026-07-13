@@ -86,6 +86,7 @@ nav:
   - Preparing data: data-preparation.md
   - Schema: schema.md
   - Testing: testing.md
+  - Monitoring: monitoring.md
   - API reference:
       - reference/index.md
       - connection: reference/connection.md

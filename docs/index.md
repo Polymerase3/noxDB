@@ -37,6 +37,12 @@ stores **metadata and file pointers**; bulk data lives on disk.
     ---
     Running the test suite and writing new tests.
 
+-   :material-heart-pulse:{ .lg .middle } **[Monitoring](monitoring.md)**
+
+    ---
+    The `noxdb_sweep` cron job: liveness, schema drift, population counts,
+    and DB/disk integrity checks, emailed as a report.
+
 -   :material-hand-heart:{ .lg .middle } **[Contributing](contributing.md)**
 
     ---
