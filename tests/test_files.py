@@ -35,12 +35,14 @@ from noxdb.files import (
 
 class TestExpectedTier:
     @pytest.mark.parametrize(
-        "ft", ["fastq_r1", "fastq_r2", "fastq_single", "bam", "counts"],
+        "ft", ["fastq_r1", "fastq_r2", "fastq_single", "bam"],
     )
     def test_archive_types(self, ft):
         assert _expected_tier(ft) == "archive"
 
-    @pytest.mark.parametrize("ft", ["beer_norm", "zigp_norm", "edger_norm"])
+    @pytest.mark.parametrize(
+        "ft", ["counts", "beer_norm", "zigp_norm", "edger_norm"],
+    )
     def test_work_types(self, ft):
         assert _expected_tier(ft) == "work"
 
@@ -138,11 +140,13 @@ class TestResolveTier:
     def test_override_to_external(self):
         assert _resolve_tier("beer_norm", "external") == "external"
 
-    def test_override_archive_to_work_allowed(self):
-        assert _resolve_tier("bam", "work") == "work"
-
-    def test_override_work_to_archive_allowed(self):
-        assert _resolve_tier("beer_norm", "archive") == "archive"
+    @pytest.mark.parametrize(
+        "ft,override",
+        [("bam", "work"), ("counts", "archive"), ("beer_norm", "archive")],
+    )
+    def test_archive_work_flip_rejected(self, ft, override):
+        with pytest.raises(ValueError, match="belongs on the"):
+            _resolve_tier(ft, override)
 
     def test_unknown_tier_rejected(self):
         with pytest.raises(ValueError):
@@ -351,13 +355,25 @@ def test_register_scratch_outside_roots_succeeds(parent_ids, roots, tmp_path):
         assert files.get(cur, fid)["storage_tier"] == "scratch"
 
 
-def test_register_override_archive_to_work_rejected(parent_ids, roots):
+def test_register_override_work_to_archive_rejected(parent_ids, roots):
+    """The tier flip itself must be what fails. The path is valid for the
+    file_type, so ``_validate_tier_path`` cannot be the thing raising."""
     _, wrk = roots
     path = _make_file(wrk / "x.tsv")
     with transaction() as cur:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="belongs on the"):
             files.register(
                 cur, parent_ids, path, "beer_norm", storage_tier="archive",
+            )
+
+
+def test_register_override_archive_to_work_rejected(parent_ids, roots):
+    arc, _ = roots
+    path = _make_file(arc / "x.bam")
+    with transaction() as cur:
+        with pytest.raises(ValueError, match="belongs on the"):
+            files.register(
+                cur, parent_ids, path, "bam", storage_tier="work",
             )
 
 
@@ -465,6 +481,19 @@ def test_update_partial(parent_ids, roots):
     assert changed is True
     with transaction() as cur:
         assert files.get(cur, fid)["storage_tier"] == "scratch"
+
+
+def test_update_tier_flip_rejected(parent_ids, roots):
+    """``files.update`` enforces the same invariant as ``register``."""
+    arc, _ = roots
+    path = _make_file(arc / "u_flip.bam")
+    with transaction() as cur:
+        fid = files.register(cur, parent_ids, path, "bam")
+    with transaction() as cur:
+        with pytest.raises(ValueError, match="belongs on the"):
+            files.update(cur, fid, storage_tier="work")
+    with transaction() as cur:
+        assert files.get(cur, fid)["storage_tier"] == "archive"
 
 
 def test_update_with_all_none_is_noop(parent_ids, roots):

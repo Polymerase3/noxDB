@@ -11,8 +11,8 @@ Storage tier policy
 -------------------
 File-type → tier is fixed by lab convention:
 
-    fastq_r1 / fastq_r2 / fastq_single / bam / counts  -> archive
-    beer_norm / zigp_norm / edger_norm                 -> work
+    fastq_r1 / fastq_r2 / fastq_single / bam           -> archive
+    counts / beer_norm / zigp_norm / edger_norm        -> work
 
 Roots are configurable via env vars (defaults shown):
 
@@ -33,10 +33,8 @@ from typing import Any
 
 import mariadb
 
-_ARCHIVE_TYPES = frozenset(
-    {"fastq_r1", "fastq_r2", "fastq_single", "bam", "counts"}
-)
-_WORK_TYPES = frozenset({"beer_norm", "zigp_norm", "edger_norm"})
+_ARCHIVE_TYPES = frozenset({"fastq_r1", "fastq_r2", "fastq_single", "bam"})
+_WORK_TYPES = frozenset({"counts", "beer_norm", "zigp_norm", "edger_norm"})
 _ALL_TYPES = _ARCHIVE_TYPES | _WORK_TYPES
 _ALL_TIERS = frozenset({"archive", "work", "scratch", "external"})
 
@@ -170,6 +168,12 @@ def _resolve_tier(file_type: str, override: str | None) -> str:
     if override not in _ALL_TIERS:
         raise ValueError(
             f"storage_tier must be one of {sorted(_ALL_TIERS)}, got {override!r}"
+        )
+    if override in {"archive", "work"} and override != expected:
+        raise ValueError(
+            f"file_type {file_type!r} belongs on the {expected!r} tier; "
+            f"cannot override storage_tier to {override!r}. Use 'scratch' or "
+            "'external' for files outside managed storage."
         )
     return override
 
