@@ -10,6 +10,49 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-09
+
+Follow-up to the 2026-09-06 weekly sweep, which reported 5792 integrity
+issues and 13302 registered files missing on disk. Neither was data loss.
+
+### Added
+- `scripts/sweep/noxdb_sweep.py`: standalone monitoring script for the
+  ccr-lab VM — liveness, schema fingerprint, population snapshot with
+  week-over-week deltas, per-project integrity, DB↔disk drift, and audit
+  log summary, emailed as an HTML report. Deployment instructions in
+  `scripts/sweep/README.md`, check-by-check rationale in
+  `docs/monitoring.md`.
+
+### Changed
+- `counts` is now a **work**-tier file type instead of archive.
+  `docs/schema.md` already documented it that way and every counts row in
+  production was already stored as work, so `files.py` was the outlier.
+- `_resolve_tier()` now enforces the `file_type → tier` invariant it was
+  documented to enforce: an `archive` ↔ `work` override that disagrees
+  with the type-derived tier is rejected. `scratch` / `external`
+  overrides are unaffected. This also makes `files.update()`'s existing
+  guard real rather than a no-op.
+- `DEFAULT_LISC_ROOT` in `scripts/prepare_migration.py` and
+  `scripts/add_controls.py` is now
+  `/lisc/data/work/ccr/mariaDB`; the `mariaDB` path segment was missing,
+  so generated manifests pointed at paths that do not exist.
+
+### Fixed
+- `_setup_audit_logger()` skipped setup whenever the `noxdb.audit` logger
+  already had **any** handler attached, so it never installed its own file
+  handler if something else got there first — pytest's logging plugin, or
+  any application with its own handler. The audit log was silently never
+  written. Setup and teardown now act only on the handler the module owns,
+  which also stops `close_pool()` from tearing down a caller's logging
+  setup.
+- `get_connection()` rolls back on `BaseException` rather than
+  `Exception`, so a `KeyboardInterrupt` or `SystemExit` mid-transaction no
+  longer returns a connection to the pool still holding its locks.
+- The project importer's pre-flight validator enforced the pre-003 schema
+  and rejected samples shared across projects. It now blocks only on a
+  `file_path` bound to a different sample, the one global UNIQUE that
+  re-use cannot resolve.
+
 ## [0.7.0] - 2026-05-16
 
 Many-to-many project↔sample schema. Applied to production `ccr_metadata`
