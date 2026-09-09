@@ -34,7 +34,7 @@ from typing import Any
 # Constants
 # --------------------------------------------------------------------------- #
 
-DEFAULT_LISC_ROOT = "/lisc/data/work/ccr"
+DEFAULT_LISC_ROOT = "/lisc/data/work/ccr/mariaDB"
 STORAGE_TIER = "work"
 
 # Tokens at the end of a SampleName that encode the library composition.

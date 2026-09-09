@@ -167,8 +167,8 @@ later.
 
 ```
 sample_name,file_path,file_type,storage_tier
-R25P01_01_IBD001_IBD_VIE_A_T_C2,/lisc/data/work/ccr/counts/R25P01_01_IBD001_IBD_VIE_A_T_C2.count.gz,counts,work
-R25P01_01_IBD001_IBD_VIE_A_T_C2,/lisc/data/work/ccr/zigp/R25P01_01_IBD001_IBD_VIE_A_T_C2.csv,zigp_norm,work
+R25P01_01_IBD001_IBD_VIE_A_T_C2,/lisc/data/work/ccr/mariaDB/counts/R25P01_01_IBD001_IBD_VIE_A_T_C2.count.gz,counts,work
+R25P01_01_IBD001_IBD_VIE_A_T_C2,/lisc/data/work/ccr/mariaDB/zigp/R25P01_01_IBD001_IBD_VIE_A_T_C2.csv,zigp_norm,work
 ```
 
 | Column | Required | Allowed values | Notes |
@@ -288,10 +288,10 @@ R25P01_90_NC_2_A_T_C2,R25P01_90_NC_2_A_T_C2,baseline,NC,25,01,A_T_C2,
 
 ```
 sample_name,file_path,file_type,storage_tier
-R25P01_01_IBD001_IBD_VIE_A_T_C2,/lisc/data/work/ccr/counts/R25P01_01_IBD001_IBD_VIE_A_T_C2.count.gz,counts,work
-R25P01_01_IBD001_IBD_VIE_A_T_C2,/lisc/data/work/ccr/zigp/R25P01_01_IBD001_IBD_VIE_A_T_C2.csv,zigp_norm,work
-R25P01_02_IBD002_IBD_VIE_A_T_C2,/lisc/data/work/ccr/counts/R25P01_02_IBD002_IBD_VIE_A_T_C2.count.gz,counts,work
-R25P01_02_IBD002_IBD_VIE_A_T_C2,/lisc/data/work/ccr/zigp/R25P01_02_IBD002_IBD_VIE_A_T_C2.csv,zigp_norm,work
+R25P01_01_IBD001_IBD_VIE_A_T_C2,/lisc/data/work/ccr/mariaDB/counts/R25P01_01_IBD001_IBD_VIE_A_T_C2.count.gz,counts,work
+R25P01_01_IBD001_IBD_VIE_A_T_C2,/lisc/data/work/ccr/mariaDB/zigp/R25P01_01_IBD001_IBD_VIE_A_T_C2.csv,zigp_norm,work
+R25P01_02_IBD002_IBD_VIE_A_T_C2,/lisc/data/work/ccr/mariaDB/counts/R25P01_02_IBD002_IBD_VIE_A_T_C2.count.gz,counts,work
+R25P01_02_IBD002_IBD_VIE_A_T_C2,/lisc/data/work/ccr/mariaDB/zigp/R25P01_02_IBD002_IBD_VIE_A_T_C2.csv,zigp_norm,work
 ```
 
 ---

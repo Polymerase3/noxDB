@@ -41,7 +41,7 @@ import csv
 import sys
 from pathlib import Path
 
-DEFAULT_LISC_ROOT = "/lisc/data/work/ccr"
+DEFAULT_LISC_ROOT = "/lisc/data/work/ccr/mariaDB"
 STORAGE_TIER = "work"
 
 # The only control project schema 003 keeps. mockIP/anchor/NC are linked

@@ -342,9 +342,24 @@ def _open_tunnel(
 # audit logger
 # --------------------------------------------------------------------------- #
 
+# Marks the handler this module owns. The idempotence check must look for
+# this rather than for "any handler at all": pytest's logging plugin, and
+# any application that attaches its own handler to ``noxdb.audit``, would
+# otherwise make setup a silent no-op and the audit log would never be
+# written.
+_AUDIT_HANDLER_FLAG = "_noxdb_audit_handler"
+
+
+def _own_audit_handlers() -> list[logging.Handler]:
+    """Return only the handlers this module attached."""
+    return [
+        h for h in _logger.handlers if getattr(h, _AUDIT_HANDLER_FLAG, False)
+    ]
+
+
 def _setup_audit_logger() -> None:
     """Configure the audit FileHandler. Idempotent within one pool lifecycle."""
-    if _logger.handlers:
+    if _own_audit_handlers():
         return
     log_path = Path(
         os.environ.get("NOXDB_AUDIT_LOG", str(Path.home() / ".noxdb" / "audit.log"))
@@ -356,12 +371,17 @@ def _setup_audit_logger() -> None:
     handler.setFormatter(
         logging.Formatter("%(asctime)s | %(user)s | %(message)s")
     )
+    setattr(handler, _AUDIT_HANDLER_FLAG, True)
     _logger.addHandler(handler)
 
 
 def _teardown_audit_logger() -> None:
-    """Close and detach all audit handlers. Used by close_pool()."""
-    for handler in list(_logger.handlers):
+    """Close and detach the audit handlers this module owns.
+
+    Handlers attached by anyone else are left alone — ``close_pool()`` has
+    no business tearing down a caller's logging setup.
+    """
+    for handler in _own_audit_handlers():
         handler.close()
         _logger.removeHandler(handler)
 
