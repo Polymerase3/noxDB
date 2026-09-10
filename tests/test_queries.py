@@ -443,3 +443,32 @@ def test_find_disk_files_missing_in_db_with_temp_root(
     paths = set(df["file_path"])
     assert str(unknown) in paths
     assert str(known) not in paths
+
+
+def test_find_disk_files_missing_in_db_defaults_to_registered_dirs(
+    populated_project, tmp_path,
+):
+    """With no roots given, only directories holding registered files are walked."""
+    pytest.importorskip("pandas")
+    registered_dir = tmp_path / "registered"
+    unrelated_dir = tmp_path / "unrelated"
+    registered_dir.mkdir()
+    unrelated_dir.mkdir()
+    known = registered_dir / "known.bam"
+    stray_beside_it = registered_dir / "stray.bam"
+    stray_elsewhere = unrelated_dir / "someone_elses.bam"
+    for f in (known, stray_beside_it, stray_elsewhere):
+        f.write_bytes(b"\x00")
+
+    with transaction() as cur:
+        cur.execute(
+            "UPDATE sample_files SET file_path = ? WHERE file_path = ?",
+            (str(known), "/lisc/archive/qproj/SAMP_A3.bam"),
+        )
+        assert str(registered_dir) in queries.registered_file_dirs(cur)
+        df = queries.find_disk_files_missing_in_db(cur)
+
+    paths = set(df["file_path"])
+    assert str(stray_beside_it) in paths
+    assert str(stray_elsewhere) not in paths
+    assert str(known) not in paths

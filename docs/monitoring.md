@@ -13,7 +13,7 @@ that don't have a library function of their own.
 
 Full deployment instructions (installing on ccr-lab, `~/.my.cnf`,
 credentials file, crontab entries) live in
-[`scripts/sweep/README.md`](https://github.com/Polymerase3/phiper-db/blob/main/scripts/sweep/README.md)
+[`scripts/sweep/README.md`](https://github.com/Polymerase3/noxDB/blob/main/scripts/sweep/README.md)
 in the repo. This page covers what it checks and why.
 
 ## Why it runs on ccr-lab directly
@@ -57,8 +57,12 @@ report.
 - **DB→disk drift** — [`queries.find_db_files_missing_on_disk`][noxdb.queries.find_db_files_missing_on_disk],
   cheap enough to run weekly.
 - **Disk→DB drift** — [`queries.find_disk_files_missing_in_db`][noxdb.queries.find_disk_files_missing_in_db],
-  a full recursive walk of `/lisc/archive` and `/lisc/work`. Reserved for
-  `monthly`/`manual` because it can take minutes.
+  a recursive walk of the directories that already hold registered files
+  (`queries.registered_file_dirs`), which the report lists under
+  `scanned_dirs`. It deliberately does *not* walk the tier roots: on this
+  cluster `/lisc/data/work` is the whole institute's work filesystem, so
+  every readable file belonging to another group would be reported as
+  unregistered. Still reserved for `monthly`/`manual`.
 - **Audit log** — tails `~/.noxdb/audit.log` and counts writes per table
   over the last 7 days, as a lightweight "is this thing actually being
   used" signal.
@@ -70,4 +74,4 @@ report.
 Lock file, 30-minute hard timeout, and a top-level crash handler that emails
 a "sweep crashed" alert with the traceback are all documented alongside the
 credentials/log paths in
-[`scripts/sweep/README.md`](https://github.com/Polymerase3/phiper-db/blob/main/scripts/sweep/README.md).
+[`scripts/sweep/README.md`](https://github.com/Polymerase3/noxDB/blob/main/scripts/sweep/README.md).

@@ -10,6 +10,54 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-09-10
+
+### Fixed
+- `queries.find_disk_files_missing_in_db` now defaults to walking only the
+  directories that already hold registered files, exposed as the new
+  `queries.registered_file_dirs`. It previously walked the tier roots, and
+  on this cluster `/lisc/data/work` is the entire institute's work
+  filesystem: the sweep spent its whole 30-minute budget enumerating other
+  groups' data and counted every readable file it found as unregistered.
+  Passing `roots=` explicitly still walks whatever you name.
+- The monitoring sweep's disk-to-DB check now reports the directories it
+  scanned, so the emailed report states its own scope.
+
+### Changed
+- `docs/quickstart.md` regenerated again. Production data changed underneath
+  it: `samples.SQR` / `samples.SQRP` were backfilled from the sample name, so
+  the plate coordinates in the examples now match the `RxxPxx` in the
+  filenames, and rebuilding the control links moved project 7 from 239
+  samples to 175. The input series listing also changed, since the eight
+  undeliverable `R01P02` rows were deleted and 96 `R31_input` samples added.
+
+## [0.7.2] - 2026-09-10
+
+Dependency and documentation fixes found while re-running the quickstart
+probe against the migrated `ccr_metadata`.
+
+### Fixed
+- `paramiko>=3.0,<4.0` moved from the `analysis` extra into the core
+  dependencies. `sshtunnel` 0.4.0 references `paramiko.DSSKey`, which
+  paramiko 4.x removed, so a plain install of noxDB picked up paramiko 4
+  and every tunneled `init_pool()` failed with
+  `module 'paramiko' has no attribute 'DSSKey'`.
+
+### Changed
+- Repository links updated from the old `phiper-db` name to `noxDB`: the
+  clone URL in `scripts/sweep/README.md` and two links in
+  `docs/monitoring.md`.
+- `docs/quickstart.md` regenerated from a fresh `scripts/probe_quickstart.py`
+  run against `ccr_metadata`. Every figure moved: project 7 now has 239
+  samples and 476 files, the project list is 20 entries, and the example
+  file paths carry the `mariaDB/` segment added by the September path
+  backfill. The claim that `init_pool()` errors out when no tunnel is
+  listening was also wrong and is now corrected.
+- `scripts/probe_quickstart.py` extended to cover `include_controls=False`,
+  the column subset used in §14, and a metadata-only `fetch.export_project`,
+  so the export byte sizes in §14 are now measured rather than approximate.
+  Its tunnel hint no longer prints a hardcoded database IP.
+
 ## [0.7.1] - 2026-09-09
 
 Follow-up to the 2026-09-06 weekly sweep, which reported 5792 integrity

@@ -606,6 +606,25 @@ def find_db_files_missing_on_disk(
     return pd.DataFrame(missing)
 
 
+def registered_file_dirs(cur) -> list[str]:
+    """Return the distinct directories that hold registered files.
+
+    Derived from ``sample_files.file_path``, so it describes where this
+    deployment actually keeps data rather than where it might. Used as
+    the default scan set for
+    [`find_disk_files_missing_in_db`][noxdb.queries.find_disk_files_missing_in_db].
+
+    Args:
+        cur: Audit-logging cursor from `transaction()`.
+
+    Returns:
+        Sorted absolute directory paths; empty when nothing is
+        registered.
+    """
+    cur.execute("SELECT DISTINCT file_path FROM sample_files")
+    return sorted({os.path.dirname(r[0]) for r in cur.fetchall() if r[0]})
+
+
 def find_disk_files_missing_in_db(
     cur,
     *,
@@ -613,16 +632,24 @@ def find_disk_files_missing_in_db(
 ) -> "pd.DataFrame":
     """Return regular files under roots that are NOT in ``sample_files``.
 
-    This is a full filesystem walk; on a real archive it can take
-    minutes. Restrict via *roots* in interactive use. Roots that don't
-    exist on the current host are silently skipped, which makes the
-    function safe to call from a laptop with no LiSC mount.
+    By default this walks only the directories that already hold
+    registered files, via
+    [`registered_file_dirs`][noxdb.queries.registered_file_dirs]. That
+    is the scope where an unregistered file is a real finding. Passing
+    a tier root instead walks everything beneath it, which on a shared
+    cluster means every other group's data — every readable file there
+    is reported as unregistered, because it is.
+
+    Roots that don't exist on the current host are silently skipped,
+    which makes the function safe to call from a laptop with no LiSC
+    mount. With nothing registered the default scan set is empty and
+    the result is empty: there is no way to tell which directories
+    would have been ours.
 
     Args:
         cur: Audit-logging cursor from `transaction()`.
-        roots: List of directories to walk. ``None`` scans
-            ``NOXDB_ARCHIVE_ROOT`` and ``NOXDB_WORK_ROOT`` (defaults
-            ``/lisc/archive`` and ``/lisc/work``).
+        roots: Directories to walk. ``None`` uses the directories of
+            the registered files.
 
     Returns:
         A ``pandas.DataFrame`` with columns ``file_path``, ``root``,
@@ -632,11 +659,11 @@ def find_disk_files_missing_in_db(
         ImportError: If pandas is not installed.
     """
     pd = _pd()
-    if roots is None:
-        roots = [_archive_root(), _work_root()]
-
     cur.execute("SELECT file_path FROM sample_files")
     known = {row[0] for row in cur.fetchall()}
+
+    if roots is None:
+        roots = sorted({os.path.dirname(p) for p in known if p})
 
     found: list[dict[str, Any]] = []
     for root in roots:
