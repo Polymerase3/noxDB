@@ -367,14 +367,19 @@ def check_db_files_missing_on_disk(cur) -> dict[str, Any]:
 
 
 def check_disk_files_missing_in_db(cur) -> dict[str, Any]:
-    found = queries.find_disk_files_missing_in_db(cur)
+    scanned = queries.registered_file_dirs(cur)
+    found = queries.find_disk_files_missing_in_db(cur, roots=scanned)
     n = len(found)
     return {
         "name": "disk_files_missing_in_db",
         "ok": n == 0,
         "level": "ok" if n == 0 else "warn",
         "summary": "no unregistered files found on disk" if n == 0 else f"{n} file(s) on disk are not registered in the DB",
-        "details": {"n_unregistered": n, "sample": found.head(20).to_dict("records") if n else []},
+        "details": {
+            "n_unregistered": n,
+            "scanned_dirs": scanned,
+            "sample": found.head(20).to_dict("records") if n else [],
+        },
     }
 
 

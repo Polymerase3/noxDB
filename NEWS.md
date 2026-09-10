@@ -10,6 +10,27 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-09-10
+
+### Fixed
+- `queries.find_disk_files_missing_in_db` now defaults to walking only the
+  directories that already hold registered files, exposed as the new
+  `queries.registered_file_dirs`. It previously walked the tier roots, and
+  on this cluster `/lisc/data/work` is the entire institute's work
+  filesystem: the sweep spent its whole 30-minute budget enumerating other
+  groups' data and counted every readable file it found as unregistered.
+  Passing `roots=` explicitly still walks whatever you name.
+- The monitoring sweep's disk-to-DB check now reports the directories it
+  scanned, so the emailed report states its own scope.
+
+### Changed
+- `docs/quickstart.md` regenerated again. Production data changed underneath
+  it: `samples.SQR` / `samples.SQRP` were backfilled from the sample name, so
+  the plate coordinates in the examples now match the `RxxPxx` in the
+  filenames, and rebuilding the control links moved project 7 from 239
+  samples to 175. The input series listing also changed, since the eight
+  undeliverable `R01P02` rows were deleted and 96 `R31_input` samples added.
+
 ## [0.7.2] - 2026-09-10
 
 Dependency and documentation fixes found while re-running the quickstart

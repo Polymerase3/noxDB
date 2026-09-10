@@ -57,8 +57,12 @@ report.
 - **DB→disk drift** — [`queries.find_db_files_missing_on_disk`][noxdb.queries.find_db_files_missing_on_disk],
   cheap enough to run weekly.
 - **Disk→DB drift** — [`queries.find_disk_files_missing_in_db`][noxdb.queries.find_disk_files_missing_in_db],
-  a full recursive walk of `/lisc/archive` and `/lisc/work`. Reserved for
-  `monthly`/`manual` because it can take minutes.
+  a recursive walk of the directories that already hold registered files
+  (`queries.registered_file_dirs`), which the report lists under
+  `scanned_dirs`. It deliberately does *not* walk the tier roots: on this
+  cluster `/lisc/data/work` is the whole institute's work filesystem, so
+  every readable file belonging to another group would be reported as
+  unregistered. Still reserved for `monthly`/`manual`.
 - **Audit log** — tails `~/.noxdb/audit.log` and counts writes per table
   over the last 7 days, as a lightweight "is this thing actually being
   used" signal.
