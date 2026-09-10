@@ -107,8 +107,8 @@ One row per physical sample / library / Ig-class measurement. `sample_name` is g
 | `visit_id`       | `BIGINT UNSIGNED` FK                                         | NO       | → `visits.visit_id` CASCADE                    |
 | `sample_name`    | `VARCHAR(100)`                                               | NO       | UNIQUE globally                                |
 | `sample_type`    | `ENUM('sample','mockIP','input','anchor','NC')`              | NO       | See [Controls](#controls)                      |
-| `SQR`            | `VARCHAR(10)`                                                | NO       | Sequencing run — plate-level key (canonicalized) |
-| `SQRP`           | `VARCHAR(10)`                                                | NO       | Plate within the run — plate-level key (canonicalized) |
+| `SQR`            | `VARCHAR(10)`                                                | NO       | Sequencing run — derived from `sample_name`, zero-padded |
+| `SQRP`           | `VARCHAR(10)`                                                | NO       | Plate within the run — derived from `sample_name`, zero-padded |
 | `library`        | `VARCHAR(50)`                                                | NO       |                                                |
 | `antibody_class` | `VARCHAR(50)`                                                | YES      |                                                |
 | `created_at`     | `TIMESTAMP`                                                  | NO       | DEFAULT `CURRENT_TIMESTAMP`                    |
@@ -117,15 +117,29 @@ One row per physical sample / library / Ig-class measurement. `sample_name` is g
 
 `SQR` / `SQRP` are **plate coordinates** matched by exact string
 equality (control auto-linking, project-scoped queries, the `003`
-backfill). To stop formatting drift from silently breaking that match,
-every write goes through one canonicalization chokepoint
+backfill).
+
+They are **derived from `sample_name`**, not taken from the import
+manifest: `R42P02_09_..` is run `42`, plate `02`, and a run-only name
+such as `R31_input1_01_..` is run `31` with an empty plate
+([`samples.plate_coords_from_name`][noxdb.samples.plate_coords_from_name]).
+The filename is the authoritative plate identity here — it matches the
+physical 96-file plates on disk, whereas manifest coordinates were found
+to collide, putting two different plates on one key and attaching
+controls to projects that had no sample on that plate. `prepare_migration`
+and `add_controls` both derive; each reports any row where the CSV
+disagrees, and falls back to the CSV only for a name carrying no
+coordinates.
+
+Every write also goes through one canonicalization chokepoint
 ([`samples.canonical_plate_id`][noxdb.samples.canonical_plate_id]):
-surrounding whitespace is stripped and the "absent" sentinels (`NA`,
-`N/A`, empty) collapse to a single canonical empty string. Zero-padding
-(e.g. `01`) is **preserved** — it is the canonical shape in this
-dataset, not noise. The importer validates and reports any value it
-normalizes; migration `003` canonicalizes pre-existing rows before the
-control backfill runs.
+whitespace is stripped, the "absent" sentinels (`NA`, `N/A`, empty)
+collapse to a single canonical empty string, and a purely numeric value
+is **zero-padded to two characters**. That padding rule exists because
+exact-string matching once read `5` and `05` as two different plates,
+which left whole projects with no controls at all. Values wider than two
+characters and non-numeric values pass through unchanged. The importer
+validates and reports any value it normalizes.
 
 ---
 

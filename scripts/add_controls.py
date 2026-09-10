@@ -24,9 +24,11 @@ So instead of inventing control projects, this script:
   * ``input`` samples still go to the dedicated ``input`` project, which
     schema 003 keeps (``queries.list_inputs`` depends on it).
 
-SQR/SQRP are taken verbatim (stripped, no zero-padding) to stay
-byte-identical with the values prepare_migration.py wrote for the study
-samples, otherwise the importer's SQR+SQRP plate match would miss.
+SQR/SQRP come from the control's own SampleName, canonicalized through
+``noxdb.samples`` exactly as prepare_migration.py does for the study
+samples — both sides must agree byte-for-byte or the plate match misses.
+The Overview CSV's own columns are used only for a control whose name
+carries no coordinates.
 
 Safe to re-run: already-present sample_names are silently skipped.
 
@@ -40,6 +42,8 @@ import argparse
 import csv
 import sys
 from pathlib import Path
+
+from noxdb.samples import canonical_plate_id, plate_coords_from_name
 
 DEFAULT_LISC_ROOT = "/lisc/data/work/ccr/mariaDB"
 STORAGE_TIER = "work"
@@ -81,8 +85,8 @@ def _strip_sample_prefix(name: str) -> str:
 
 
 def _plate(sqr: str, sqrp: str) -> tuple[str, str]:
-    """Normalised plate key. Verbatim-stripped to match study samples."""
-    return (sqr.strip(), sqrp.strip())
+    """Canonical plate key, matching what the study samples are stored under."""
+    return (canonical_plate_id(sqr), canonical_plate_id(sqrp))
 
 
 def _read_csv_set(path: Path, *cols: str) -> set[tuple]:
@@ -181,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
 
     n_skipped = 0
     orphans: list[tuple[str, str, str]] = []  # (sample_name, sqr, sqrp)
+    n_name_override = 0   # Overview CSV disagreed with the SampleName
+    n_name_fallback = 0   # SampleName carried no coordinates at all
 
     print(f"Scanning {overview_path.name}...")
 
@@ -202,6 +208,14 @@ def main(argv: list[str] | None = None) -> int:
             sample_type = _detect_sample_type(sample_name)
             if sample_type == "sample":
                 continue
+
+            derived = plate_coords_from_name(sample_name)
+            if derived is None:
+                n_name_fallback += 1
+            else:
+                if (sqr or sqrp) and _plate(sqr, sqrp) != derived:
+                    n_name_override += 1
+                sqr, sqrp = derived
 
             if sample_name in existing_samples or sample_name in seen_samples:
                 n_skipped += 1
@@ -326,6 +340,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  files    appended : {len(new_files)}")
     if n_skipped:
         print(f"  skipped (already exist) : {n_skipped}")
+    if n_name_override:
+        print(f"  Overview CSV disagreed with the SampleName : {n_name_override}"
+              "  (used the name)")
+    if n_name_fallback:
+        print(f"  no coordinates in the SampleName : {n_name_fallback}"
+              "  (used the Overview CSV)")
     if orphans:
         print(f"  ORPHAN controls (no study project shares the plate) : {len(orphans)}")
         for name, sqr, sqrp in orphans[:20]:

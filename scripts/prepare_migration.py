@@ -16,6 +16,13 @@ Outputs (inside <output_dir>):
     files/manifest.csv
     _warnings.txt       rows that needed special handling
 
+SQR / SQRP are derived from the SampleName (``R42P02_..`` is run 42
+plate 02), not read from the meta CSV: the filename is the authoritative
+plate identity here, while manifest coordinates have been seen to put two
+different plates on one key. The CSV columns are still read, and any
+disagreement is reported in _warnings.txt; they are used only when a name
+carries no coordinates at all.
+
 LISC file paths are constructed as:
     <lisc_root>/counts/{SampleName}.count.gz   → file_type=counts
     <lisc_root>/zigp/{SampleName}.csv          → file_type=zigp_norm
@@ -29,6 +36,8 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+
+from noxdb.samples import plate_coords_from_name
 
 # --------------------------------------------------------------------------- #
 # Constants
@@ -300,8 +309,24 @@ def process_meta_files(
                     continue
                 seen_samples.add(sample_name)
 
-                sqr   = (row.get("SQR")   or "").strip()
-                sqrp  = (row.get("SQRP")  or "").strip()
+                csv_sqr  = (row.get("SQR")  or "").strip()
+                csv_sqrp = (row.get("SQRP") or "").strip()
+                derived  = plate_coords_from_name(sample_name)
+                if derived is None:
+                    sqr, sqrp = csv_sqr, csv_sqrp
+                    warnings.append(
+                        f"{meta_file.name} row {row_num}: no plate coordinates in "
+                        f"sample_name {sample_name!r} — fell back to the CSV "
+                        f"(SQR={csv_sqr!r}, SQRP={csv_sqrp!r})"
+                    )
+                else:
+                    sqr, sqrp = derived
+                    if (csv_sqr or csv_sqrp) and (csv_sqr, csv_sqrp) != (sqr, sqrp):
+                        warnings.append(
+                            f"{meta_file.name} row {row_num}: CSV says SQR={csv_sqr!r} "
+                            f"SQRP={csv_sqrp!r}, sample_name {sample_name!r} says "
+                            f"SQR={sqr!r} SQRP={sqrp!r} — used the name"
+                        )
                 lib   = _extract_library(sample_name)
 
                 samples_rows.append({

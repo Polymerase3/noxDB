@@ -11,6 +11,7 @@ and [`get_or_create`][noxdb.samples.get_or_create] keys on
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import mariadb
@@ -45,11 +46,16 @@ _PLATE_NULLISH = frozenset({"", "na", "n/a"})
 def canonical_plate_id(value: str | None) -> str:
     """Return the canonical form of an SQR / SQRP plate identifier.
 
-    Strips surrounding whitespace and collapses the "absent" sentinels
+    Strips surrounding whitespace, collapses the "absent" sentinels
     (``""``, ``"NA"``, ``"N/A"``, case-insensitive) to a single
-    canonical empty string. Any other value is returned stripped but
-    otherwise verbatim — zero-padding is left intact because it *is*
-    the canonical shape here.
+    canonical empty string, and zero-pads a purely numeric identifier
+    to two characters. Anything non-numeric is returned stripped but
+    otherwise verbatim.
+
+    The padding matters: matching is by exact string, so ``"5"`` and
+    ``"05"`` used to describe one physical plate as two, which left
+    whole projects with no controls. Normalizing here means every write
+    path agrees on one spelling.
 
     This is the one normalization chokepoint for plate identifiers;
     [`create`][noxdb.samples.create] / [`update`][noxdb.samples.update]
@@ -63,7 +69,43 @@ def canonical_plate_id(value: str | None) -> str:
         The canonical identifier (possibly ``""`` for "no plate").
     """
     s = (value or "").strip()
-    return "" if s.lower() in _PLATE_NULLISH else s
+    if s.lower() in _PLATE_NULLISH:
+        return ""
+    return s.zfill(2) if s.isdigit() else s
+
+
+# Plate coordinates live in the sample name: 'R42P02_09_..' is run 42
+# plate 02, 'R31_input1_01_..' is run 31 with no plate.
+_NAME_PLATE_RE = re.compile(r"^R(\d+)P(\d+)_")
+_NAME_RUN_RE = re.compile(r"^R(\d+)_")
+
+
+def plate_coords_from_name(sample_name: str | None) -> tuple[str, str] | None:
+    """Read the ``(SQR, SQRP)`` plate coordinates out of a sample name.
+
+    The filename is the authoritative plate identity on this deployment:
+    it matches the physical 96-file plates on disk, while manifest
+    coordinates have been observed to collide, putting two different
+    plates on one key. Both halves come back canonicalized, so the
+    result can be compared byte-for-byte with a stored value.
+
+    Args:
+        sample_name: Full sample name, e.g.
+            ``"R42P02_09_PIC20_T1_A_T_C2"``.
+
+    Returns:
+        ``(sqr, sqrp)`` for a run+plate name, ``(sqr, "")`` for a
+        run-only name such as an input, or ``None`` when the name
+        carries no coordinates at all — the caller decides whether that
+        is a warning or a failure.
+    """
+    m = _NAME_PLATE_RE.match(sample_name or "")
+    if m:
+        return canonical_plate_id(m.group(1)), canonical_plate_id(m.group(2))
+    m = _NAME_RUN_RE.match(sample_name or "")
+    if m:
+        return canonical_plate_id(m.group(1)), ""
+    return None
 
 
 def create(
