@@ -43,6 +43,12 @@ report.
 - **Liveness** — `SELECT 1` through [`transaction()`][noxdb.connection.transaction],
   timed. If this fails, every other check for that run is skipped — no point
   walking the filesystem when the DB itself is unreachable.
+- **Row counts** — an exact `COUNT(*)` per table, compared with the previous
+  run. Distinct from the population snapshot below, which sums *per-project*
+  figures: there a sample shared by two projects counts twice and one linked
+  to no project is invisible. A table that shrank at all is a warning; one
+  that lost 10% or more is an error. This runs nightly as well as weekly,
+  because a vanishing table is the one thing worth interrupting someone for.
 - **Schema fingerprint** — hashes `information_schema.columns` for the
   connected database and diffs against the last run's hash. Catches both
   deliberate migrations and accidental `ALTER`s.
@@ -63,6 +69,21 @@ report.
   cluster `/lisc/data/work` is the whole institute's work filesystem, so
   every readable file belonging to another group would be reported as
   unregistered. Still reserved for `monthly`/`manual`.
+- **Orphans** — rows that hang off nothing. Foreign-key orphans cannot happen
+  (InnoDB constraints prevent them); these are the semantic kind, such as a
+  sample belonging to no project, which is invisible to every project-scoped
+  query while still occupying a row. Controls legitimately sit unlinked until
+  a study sample lands on their plate, so they are reported but not flagged.
+- **Duplicates** — two passes. Exact: rows identical on every column except
+  the surrogate key and `created_at`, per table. Near: samples whose plate,
+  well and identity match but whose names are padded differently, which is how
+  one specimen came to be registered twice as `R05P01_01_..` and
+  `R05P01_1_..`.
+- **Activity** — new rows in the last 7 days per table, and new samples per
+  project, read from `created_at`. This is deliberately not the audit log
+  below: that only sees writes made through noxdb *on this host*, so work done
+  from another machine never appears in it.
+- **Database size** — `data_length + index_length` per table, largest first.
 - **Audit log** — tails `~/.noxdb/audit.log` and counts writes per table
   over the last 7 days, as a lightweight "is this thing actually being
   used" signal.
