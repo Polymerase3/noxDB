@@ -122,13 +122,22 @@ python ~/noxdb/scripts/sweep/noxdb_sweep.py --mode manual
 | Check | heartbeat | weekly | monthly | manual |
 |---|:-:|:-:|:-:|:-:|
 | Liveness (`SELECT 1`, response time) | ✓ | ✓ | ✓ | ✓ |
+| Row counts per table, flagged if any shrank | ✓ | ✓ | ✓ | ✓ |
 | Schema fingerprint diff | | ✓ | ✓ | ✓ |
 | Population snapshot (projects/subjects/visits/samples/controls/inputs/files) | | ✓ | ✓ | ✓ |
 | Integrity check (per project) | | ✓ | ✓ | ✓ |
+| Orphaned rows (samples in no project, visits with no sample) | | ✓ | ✓ | ✓ |
+| Duplicate rows (exact, and samples registered twice) | | ✓ | ✓ | ✓ |
+| Activity (new rows in the last 7d, per table and project) | | ✓ | ✓ | ✓ |
+| Database size on disk, per table | | ✓ | ✓ | ✓ |
 | DB→disk drift (registered files missing on disk) | | ✓ | ✓ | ✓ |
-| Disk→DB drift (full filesystem walk — slow) | | | ✓ | ✓ |
+| Disk→DB drift (walks the registered directories) | | | ✓ | ✓ |
 | Audit log summary (writes in last 7d) | | ✓ | ✓ | ✓ |
 | 30-day uptime % | | | ✓ | |
+
+Every report ends with the run's own metadata: start time, duration, CPU
+seconds, peak memory, the commit this script ran from, and the Python and
+host it ran on.
 
 If the liveness check itself fails, every other check for that run is
 skipped (no point walking the filesystem when the DB is down) and the

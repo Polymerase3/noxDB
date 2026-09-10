@@ -10,6 +10,36 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-09-10
+
+Monitoring sweep gains the checks it was missing. Closes #2.
+
+### Added
+- **Row counts** per table, compared with the previous run. A table that
+  shrank at all warns; one that lost 10% or more errors. This runs in the
+  nightly heartbeat as well as weekly, so data loss is caught within a day
+  instead of a week. It is deliberately separate from the population
+  snapshot, which sums per-project figures and therefore double-counts a
+  shared sample and cannot see one linked to no project — the population
+  figure read 11582 files where `sample_files` held 13345 rows.
+- **Orphan check** for rows that hang off nothing: samples in no project,
+  subjects with no visit, visits with no sample. Foreign-key orphans cannot
+  happen, so these are the semantic kind that queries silently skip past.
+  Controls awaiting a study sample on their plate are reported but not
+  flagged, since that state is legitimate.
+- **Duplicate detection**, in two passes: rows identical on every column but
+  the surrogate key and `created_at`, and samples whose plate, well and
+  identity match while their names are padded differently — the shape that
+  had one specimen registered twice as `R05P01_01_..` and `R05P01_1_..`.
+- **Activity summary** from `created_at`: new rows per table and new samples
+  per project over the last 7 days. The existing audit-log check only sees
+  writes made through noxdb on the sweep's own host, so it misses anything
+  done from another machine.
+- **Database size** on disk, per table, largest first.
+- **Run metadata** in every report and log line: start time, duration, CPU
+  seconds, peak memory, the commit the script ran from, and the Python and
+  host it ran on.
+
 ## [0.7.4] - 2026-09-10
 
 Closes the loop on the plate-coordinate work: 0.7.3 shipped the tooling
