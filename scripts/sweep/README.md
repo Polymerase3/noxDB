@@ -20,7 +20,7 @@ ccr-lab-only override — don't change the package's own `pyproject.toml` pin.
 python3 -m venv ~/noxdb-venv
 source ~/noxdb-venv/bin/activate
 pip install "mariadb==1.0.11" sshtunnel pyyaml pandas
-git clone https://github.com/Polymerase3/phiper-db.git ~/noxdb   # or pull if already cloned
+git clone https://github.com/Polymerase3/noxDB.git ~/noxdb   # or pull if already cloned
 cd ~/noxdb
 pip install --no-deps -e .    # --no-deps: skip re-resolving mariadb>=1.1.10
 ```

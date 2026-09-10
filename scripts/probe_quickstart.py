@@ -10,12 +10,13 @@ Prerequisites:
 
 Steps covered: init_pool, projects, project_summary, samples_for_project,
 subjects, visits, samples CRUD, queries module (samples_with_metadata,
-files_for_project, project_tidy_table).
+files_for_project, project_tidy_table), and a metadata-only
+fetch.export_project into a temp dir for the §14 figures.
 
 Run one block at a time — each is independently timed and flushed so a hang
 is immediately visible. Pool is always closed in the finally block.
 """
-import sys, time
+import sys, time, os, tempfile
 sys.path.insert(0, "src")
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -29,7 +30,7 @@ pd.set_option("display.width", 120)
 pd.set_option("display.max_colwidth", 30)
 
 from noxdb import init_pool, close_pool, transaction
-from noxdb import projects, subjects, visits, samples, queries
+from noxdb import projects, subjects, visits, samples, queries, fetch
 
 def jsonable(obj):
     if isinstance(obj, (datetime, date)):
@@ -55,7 +56,8 @@ def _port_open(port: int) -> bool:
 
 if not _port_open(3307):
     print("ERROR: nothing listening on 127.0.0.1:3307 — start the tunnel first:", flush=True)
-    print("  ssh -f -N -L 3307:10.65.3.50:3306 youruser@ccr-lab.lisc.univie.ac.at", flush=True)
+    print("  ssh -f -N -L 3307:<host>:3306 youruser@ccr-lab.lisc.univie.ac.at", flush=True)
+    print("  (<host> = the [noxdb] host from ~/.my.cnf)", flush=True)
     sys.exit(1)
 print("tunnel: 127.0.0.1:3307 is open, reusing it", flush=True)
 
@@ -95,6 +97,10 @@ try:
         df_without = queries.samples_for_project(cur, first_pid, has_files=False)
         done(t, f"with files: {len(df_with)}, without: {len(df_without)}")
 
+        t = step("4c. include_controls=False")
+        df_real = queries.samples_for_project(cur, first_pid, include_controls=False)
+        done(t, f"{len(df_real)} real samples (no controls)")
+
         # ── 5. subjects CRUD ──────────────────────────────────────────────────
         t = step(f"5. subjects.list_for_project(project_id={first_pid})")
         subj_list = subjects.list_for_project(cur, first_pid)
@@ -132,6 +138,9 @@ try:
         done(t, f"{len(dff)} files")
         if not dff.empty:
             print(dff.head(5).to_string(index=False), flush=True)
+            print("\n-- doc-shaped subset (first 6 rows) --", flush=True)
+            subset = ["file_id", "sample_name", "file_type", "file_path", "storage_tier"]
+            print(dff[subset].head(6).to_string(index=False), flush=True)
 
         # ── 10. project_tidy_table ────────────────────────────────────────────
         t = step(f"10. queries.project_tidy_table(project_id={first_pid})")
@@ -157,6 +166,26 @@ try:
         done(t, f"{len(dfi)} input rows")
         if not dfi.empty:
             print(dfi.head(3).to_string(index=False), flush=True)
+
+        # ── 13. projects.get + fetch.export_project (metadata only) ──────────
+        t = step(f"13. projects.get({first_pid}) + fetch.export_project(include_files=False)")
+        project_row = projects.get(cur, first_pid)
+        print(json.dumps(project_row, default=jsonable, indent=2), flush=True)
+        outdir = os.path.join(tempfile.mkdtemp(prefix="noxdb_probe_"), "export")
+        result = fetch.export_project(
+            cur,
+            project_id=first_pid,
+            output_dir=outdir,
+            include_files=False,
+            metadata_formats=("csv",),
+        )
+        done(t)
+        for fn in sorted(os.listdir(outdir)):
+            print(f"  {fn}  ({os.path.getsize(os.path.join(outdir, fn)):,} bytes)", flush=True)
+        print("--- README.txt ---", flush=True)
+        print(open(os.path.join(outdir, "README.txt")).read(), flush=True)
+        print("--- result ---", flush=True)
+        print(json.dumps(result, default=jsonable, indent=2), flush=True)
 
 finally:
     close_pool()
