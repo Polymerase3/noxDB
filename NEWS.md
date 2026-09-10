@@ -68,6 +68,11 @@ in a column named for sequencing. Anything that grouped or filtered on
   systems. The worked example now gives an IP plate and a sequencing
   plate with different numbers, since the old one used the same digits
   for both and taught the confusion this release fixes.
+- `docs/quickstart.md` regenerated from `scripts/probe_quickstart.py`
+  against the backfilled database. Every count is unchanged; what moved
+  is the coordinates. `R14P02_77_..` now reads IPR 14, IPRP 02, SQR 07,
+  SQRP 02 where it used to read SQR 14, SQRP 02. The `metadata.csv`
+  export grew from 24,096 to 25,155 bytes, being two columns wider.
 
 ### Notes
 - 32 control wells appear twice in the sheet, sequenced in two runs,
@@ -76,8 +81,12 @@ in a column named for sequencing. Anything that grouped or filtered on
   those controls on a different sequencing plate from the study wells
   of their own IP plate; which of the two runs produced the stored
   counts file is not recorded anywhere.
-- `docs/quickstart.md` is not regenerated here. Its figures need a
-  probe run against the backfilled database.
+- Applied to `ccr_metadata` on 2026-09-10. All 6722 rows verified
+  afterwards: every `SQR`/`SQRP` matches the intended backfill, every
+  `IPR`/`IPRP` matches its sample name, and every control link still
+  shares an IP plate with a study sample of its project. Sequencing
+  runs now span 02-31 across 23 distinct runs, where the IP numbering
+  spanned 02-47 across 40.
 
 ## [0.7.5] - 2026-09-10
 
