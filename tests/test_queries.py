@@ -248,7 +248,7 @@ def test_samples_for_project_returns_all_samples(populated_project):
     assert set(df.columns) >= {
         "project_id", "subject_id", "subject_code", "visit_id",
         "timepoint", "sample_id", "sample_name", "sample_type",
-        "SQR", "SQRP", "library", "antibody_class",
+        "IPR", "IPRP", "SQR", "SQRP", "library", "antibody_class",
     }
 
 

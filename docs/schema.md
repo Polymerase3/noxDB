@@ -107,29 +107,59 @@ One row per physical sample / library / Ig-class measurement. `sample_name` is g
 | `visit_id`       | `BIGINT UNSIGNED` FK                                         | NO       | → `visits.visit_id` CASCADE                    |
 | `sample_name`    | `VARCHAR(100)`                                               | NO       | UNIQUE globally                                |
 | `sample_type`    | `ENUM('sample','mockIP','input','anchor','NC')`              | NO       | See [Controls](#controls)                      |
-| `SQR`            | `VARCHAR(10)`                                                | NO       | Sequencing run — derived from `sample_name`, zero-padded |
-| `SQRP`           | `VARCHAR(10)`                                                | NO       | Plate within the run — derived from `sample_name`, zero-padded |
+| `IPR`            | `VARCHAR(10)`                                                | NO       | IP run — derived from `sample_name`, zero-padded |
+| `IPRP`           | `VARCHAR(10)`                                                | NO       | IP plate within that run — derived from `sample_name`, zero-padded |
+| `SQR`            | `VARCHAR(10)`                                                | NO       | Sequencing run — from the run sheet, zero-padded |
+| `SQRP`           | `VARCHAR(10)`                                                | NO       | Sequencing plate within that run — from the run sheet, zero-padded |
 | `library`        | `VARCHAR(50)`                                                | NO       |                                                |
 | `antibody_class` | `VARCHAR(50)`                                                | YES      |                                                |
 | `created_at`     | `TIMESTAMP`                                                  | NO       | DEFAULT `CURRENT_TIMESTAMP`                    |
 
 `NC` was added to the `sample_type` ENUM in migration `002_controls_support`.
 
-`SQR` / `SQRP` are **plate coordinates** matched by exact string
-equality (control auto-linking, project-scoped queries, the `003`
-backfill).
+#### Two coordinate systems
 
-They are **derived from `sample_name`**, not taken from the import
-manifest: `R42P02_09_..` is run `42`, plate `02`, and a run-only name
-such as `R31_input1_01_..` is run `31` with an empty plate
-([`samples.plate_coords_from_name`][noxdb.samples.plate_coords_from_name]).
-The filename is the authoritative plate identity here — it matches the
-physical 96-file plates on disk, whereas manifest coordinates were found
-to collide, putting two different plates on one key and attaching
-controls to projects that had no sample on that plate. `prepare_migration`
-and `add_controls` both derive; each reports any row where the CSV
-disagrees, and falls back to the CSV only for a name carrying no
-coordinates.
+A sample carries **two unrelated pairs of coordinates**, and confusing
+them is the bug that migration `004_ip_and_sequencing_coords` exists to
+fix. Both are matched by exact string equality, so both are zero-padded
+to a canonical form on every write
+([`samples.canonical_plate_id`][noxdb.samples.canonical_plate_id]).
+
+`IPR` / `IPRP` — **immunoprecipitation** run and plate. This is the
+`RxxPxx` in `sample_name`, and the grain of the files on disk: a plate
+is 96 wells, wells 81-96 being its controls. Derived from the name by
+[`samples.ip_coords_from_name`][noxdb.samples.ip_coords_from_name] on
+insert and never supplied by a caller, so a stored pair cannot
+contradict the name it came from. `R42P02_09_..` is IP run `42`, plate
+`02`; a run-only name such as `R31_input1_01_..` is run `31` with an
+empty plate.
+
+`SQR` / `SQRP` — **sequencing** run and the plate within it. These come
+from the run sheet and from nowhere else; nothing in the sample name
+encodes them. `R14P02_77_..` sits on IP plate `R14P02` but was
+sequenced as run `07`, plate `02`.
+
+The two pair up almost one-to-one at the plate level — each of the 150
+sequencing plates in production carries exactly one IP plate — but the
+*numbering* is unrelated, so neither can be computed from the other.
+The runs do not pair up at all: 40 IP runs map onto 23 sequencing runs,
+one sequencing run pooling up to five IP runs.
+
+Three IP plates span two sequencing plates. On `R08P01` and `R08P02`
+the study wells 1-80 and the control wells 81-96 were sequenced
+separately, so a control can carry a different `SQR` from the samples
+it controls for. This is exactly why control linking keys on `IPR` /
+`IPRP` and not on the sequencing pair.
+
+!!! warning "Releases 0.7.3 and 0.7.4"
+
+    Those releases read the sample name for `SQR`/`SQRP`, on the belief
+    that the name encoded the sequencing coordinates. It does not, and
+    the backfill put IP values in every sequencing column in production.
+    `004` moves them to `IPR`/`IPRP`, and
+    `scripts/backfill_sequencing_coords.py` rewrites `SQR`/`SQRP` from
+    the run sheet. Any analysis that grouped by `SQR` between those
+    releases and 0.8.0 was grouping by IP run.
 
 Every write also goes through one canonicalization chokepoint
 ([`samples.canonical_plate_id`][noxdb.samples.canonical_plate_id]):
@@ -235,13 +265,15 @@ through [`project_samples`](#project_samples) like any other sample.
 ### How controls are linked to projects
 
 A control is linked to **every study project whose real samples share
-its plate**, identified by the canonical `SQR` + `SQRP` coordinates
-that every sample row carries. This link is materialized into
+its IP plate**, identified by the canonical `IPR` + `IPRP` coordinates
+that every sample row carries. This is an IP relationship: a control
+occupies a well of the physical plate it controls for, and says nothing
+about which sequencing run happened to read it. This link is materialized into
 `project_samples`, not computed at query time:
 
 - **At import** — the importer links each imported sample to its
   project, then auto-links any existing control (mockIP/anchor/NC)
-  whose `SQR`+`SQRP` matches a real (`sample`-type) row in the bundle.
+  whose `IPR`+`IPRP` matches a real (`sample`-type) row in the bundle.
 - **For historical data** — migration `003`'s Backfill 3 inserts the
   same control→study-project links for every plate-sharing project.
 
@@ -311,5 +343,6 @@ are still allowed for one-off cases.
 - `schema/001_initial.sql` — initial schema.
 - `schema/002_controls_support.sql` — nullable `sex`/`age` for control rows; adds `NC` to `sample_type` ENUM.
 - `schema/003_cross_project_samples.sql` — adds the `project_samples` junction; drops `subjects.project_id` (global UNIQUE on `subject_code`); canonicalizes `SQR`/`SQRP`; backfills study/input/control membership; deletes the `mockIP`/`anchor`/`NC` projects.
+- `schema/004_ip_and_sequencing_coords.sql` — adds `IPR`/`IPRP`; moves the existing (IP) values into them so `SQR`/`SQRP` can be backfilled with the real sequencing coordinates by `scripts/backfill_sequencing_coords.py`.
 - `users/users.sql` — role and privilege definitions (the matching `users_with_passwords.sql` is gitignored).
 - `seed/load_fake_data.py` — fake-data seed covering all four EAV value types and a longitudinal subject example.

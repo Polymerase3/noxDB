@@ -1,10 +1,10 @@
-"""Unit tests for SQR/SQRP canonicalization (no DB required)."""
+"""Unit tests for coordinate canonicalization (no DB required)."""
 
 from __future__ import annotations
 
 import pytest
 
-from noxdb.samples import canonical_plate_id, plate_coords_from_name
+from noxdb.samples import canonical_plate_id, ip_coords_from_name
 from noxdb._import import schema
 
 
@@ -70,11 +70,23 @@ def test_validate_plate_id_raises_when_too_long():
         (None, None),
     ],
 )
-def test_plate_coords_from_name(name, expected):
-    assert plate_coords_from_name(name) == expected
+def test_ip_coords_from_name(name, expected):
+    assert ip_coords_from_name(name) == expected
 
 
-def test_plate_coords_from_name_agrees_with_canonical_plate_id():
+def test_ip_coords_from_name_agrees_with_canonical_plate_id():
     """Both halves come back canonical, so they compare byte-for-byte."""
-    sqr, sqrp = plate_coords_from_name("R5P1_7_x_A_T_C2")
-    assert (sqr, sqrp) == (canonical_plate_id("5"), canonical_plate_id("1"))
+    ipr, iprp = ip_coords_from_name("R5P1_7_x_A_T_C2")
+    assert (ipr, iprp) == (canonical_plate_id("5"), canonical_plate_id("1"))
+
+
+def test_ip_coords_are_not_the_sequencing_coords():
+    """The regression 0.8.0 exists to fix.
+
+    ``R14P02_77_FAU0001_ADMCI_NED_A_T_C2`` sits on IP plate R14P02 but
+    was sequenced as SQR 07, plate 02. Reading the name gives the IP
+    pair and must never be presented as the sequencing pair — 0.7.3
+    backfilled ``samples.SQR``/``SQRP`` this way and put IP values in
+    every sequencing column in production.
+    """
+    assert ip_coords_from_name("R14P02_77_FAU0001_ADMCI_NED_A_T_C2") == ("14", "02")

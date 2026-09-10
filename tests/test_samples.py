@@ -46,6 +46,71 @@ def test_create_returns_new_id_and_persists(two_visits):
     assert row["antibody_class"] == "IgG"
 
 
+def test_create_derives_ip_coords_from_the_name(two_visits):
+    """IPR/IPRP come from the name, never from the caller.
+
+    The sequencing coordinates passed in are deliberately different, so
+    a test that confused the two pairs would fail here.
+    """
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = samples.create(
+            cur, v1, "R14P02_77_FAU0001_ADMCI_NED_A_T_C2", "sample",
+            "07", "02", "libA",
+        )
+        row = samples.get(cur, sid)
+    assert (row["IPR"], row["IPRP"]) == ("14", "02")
+    assert (row["SQR"], row["SQRP"]) == ("07", "02")
+
+
+def test_create_derives_ip_coords_canonically(two_visits):
+    """An unpadded name stores the padded form, so IPR+IPRP matching
+    compares byte-for-byte against a padded row."""
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = samples.create(cur, v1, "R5P1_7_x_A_T_C2", "sample", "11", "03", "libA")
+        row = samples.get(cur, sid)
+    assert (row["IPR"], row["IPRP"]) == ("05", "01")
+
+
+def test_create_ip_coords_empty_for_a_run_only_name(two_visits):
+    """An input carries a run and no plate, matching how SQRP models
+    'no plate' as '' rather than NULL."""
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = samples.create(cur, v1, "R02_input_01_A_T_C2", "input", "02", "", "libA")
+        row = samples.get(cur, sid)
+    assert (row["IPR"], row["IPRP"]) == ("02", "")
+
+
+def test_create_ip_coords_empty_when_the_name_has_none(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = samples.create(cur, v1, "no_coordinates_here", "sample", "07", "02", "libA")
+        row = samples.get(cur, sid)
+    assert (row["IPR"], row["IPRP"]) == ("", "")
+
+
+def test_update_can_correct_ip_coords(two_visits):
+    """create() derives them, but a stored row must still be fixable."""
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = samples.create(cur, v1, "R05P01_1_x_A_T_C2", "sample", "07", "02", "libA")
+        samples.update(cur, sid, ipr=" 9 ", iprp="N/A")
+        row = samples.get(cur, sid)
+    assert (row["IPR"], row["IPRP"]) == ("09", "")
+
+
+def test_update_leaves_ip_coords_alone_when_not_given(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = samples.create(cur, v1, "R42P02_09_x_A_T_C2", "sample", "07", "02", "libA")
+        samples.update(cur, sid, sqr="12", sqrp="04")
+        row = samples.get(cur, sid)
+    assert (row["IPR"], row["IPRP"]) == ("42", "02")
+    assert (row["SQR"], row["SQRP"]) == ("12", "04")
+
+
 def test_create_canonicalizes_sqr_sqrp(two_visits):
     """Whitespace is stripped; NA/empty SQRP collapses to '' so
     SQR+SQRP plate matching never drifts. Padding is preserved."""

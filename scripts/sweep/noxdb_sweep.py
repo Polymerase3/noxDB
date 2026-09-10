@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import Any
 
 from noxdb import close_pool, init_pool, projects, queries, transaction
-from noxdb.samples import plate_coords_from_name
+from noxdb.samples import ip_coords_from_name
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -570,11 +570,11 @@ def _sample_identity(sample_name: str) -> tuple | None:
 
     ``R05P01_01_0474408_KielP01_A_T_C2`` and
     ``R05P01_1_0474408_KielP01_A_T_C2`` are one specimen registered
-    twice. Only the plate coordinates and the well number are
+    twice. Only the IP coordinates and the well number are
     re-normalized; everything after them is compared verbatim, because
     a leading zero inside a subject id is significant.
     """
-    coords = plate_coords_from_name(sample_name)
+    coords = ip_coords_from_name(sample_name)
     parts = (sample_name or "").split("_")
     if coords is None or len(parts) < 3 or not parts[1].isdigit():
         return None

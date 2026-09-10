@@ -141,8 +141,10 @@ def register_sample_with_files(
         sample_name: Globally unique sample name.
         sample_type: See [`samples.create`][noxdb.samples.create]
             for allowed values. Used only on insert.
-        sqr: Used only on insert.
-        sqrp: Used only on insert.
+        sqr: Sequencing run. Used only on insert.
+        sqrp: Sequencing plate. Used only on insert. The IP
+            coordinates are derived from *sample_name* by
+            [`samples.create`][noxdb.samples.create].
         library: Used only on insert.
         antibody_class: Used only on insert.
         sample_metadata: Optional ``{key: value}`` upserted via

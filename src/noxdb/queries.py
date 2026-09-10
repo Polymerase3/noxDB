@@ -123,7 +123,8 @@ def samples_for_project(
 
     Output columns: ``project_id``, ``subject_id``, ``subject_code``,
     ``visit_id``, ``timepoint``, ``sample_id``, ``sample_name``,
-    ``sample_type``, ``SQR``, ``SQRP``, ``library``, ``antibody_class``.
+    ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``,
+    ``library``, ``antibody_class``.
 
     Args:
         cur: Audit-logging cursor from `transaction()`.
@@ -159,7 +160,7 @@ def samples_for_project(
         where.append("sm.sample_type NOT IN ('mockIP', 'anchor', 'NC')")
     cur.execute(
         "SELECT sm.sample_id, sm.visit_id, sm.sample_name, sm.sample_type, "
-        "sm.SQR, sm.SQRP, sm.library, sm.antibody_class, "
+        "sm.IPR, sm.IPRP, sm.SQR, sm.SQRP, sm.library, sm.antibody_class, "
         "v.timepoint, sub.subject_id, sub.subject_code "
         "FROM project_samples ps "
         "JOIN samples sm   ON sm.sample_id   = ps.sample_id "
@@ -201,6 +202,8 @@ def samples_for_project(
             "sample_id": sr["sample_id"],
             "sample_name": sr["sample_name"],
             "sample_type": sr["sample_type"],
+            "IPR": sr["IPR"],
+            "IPRP": sr["IPRP"],
             "SQR": sr["SQR"],
             "SQRP": sr["SQRP"],
             "library": sr["library"],
@@ -340,7 +343,8 @@ def controls_for_project(
 
     Returns:
         A ``pandas.DataFrame`` with columns: ``sample_id``, ``sample_name``,
-        ``sample_type``, ``SQR``, ``SQRP``, ``library``, ``antibody_class``,
+        ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``, ``library``,
+        ``antibody_class``,
         ``visit_id``, ``timepoint``, ``subject_id``, ``subject_code``,
         ``project_id`` (the queried project's id).
 
@@ -351,7 +355,8 @@ def controls_for_project(
     types = sample_types or ["mockIP", "anchor", "NC"]
     type_ph = ",".join(["?"] * len(types))
     cur.execute(
-        "SELECT s.sample_id, s.sample_name, s.sample_type, s.SQR, s.SQRP, "
+        "SELECT s.sample_id, s.sample_name, s.sample_type, "
+        "s.IPR, s.IPRP, s.SQR, s.SQRP, "
         "s.library, s.antibody_class, "
         "v.visit_id, v.timepoint, "
         "sub.subject_id, sub.subject_code, ps.project_id "
@@ -360,7 +365,7 @@ def controls_for_project(
         "JOIN visits v     ON v.visit_id     = s.visit_id "
         "JOIN subjects sub ON sub.subject_id = v.subject_id "
         f"WHERE ps.project_id = ? AND s.sample_type IN ({type_ph}) "
-        "ORDER BY s.sample_type, s.SQR, s.SQRP, s.sample_id",
+        "ORDER BY s.sample_type, s.IPR, s.IPRP, s.sample_id",
         tuple([project_id] + list(types)),
     )
     return pd.DataFrame(_fetch_dicts(cur))
@@ -374,7 +379,8 @@ def list_inputs(cur) -> "pd.DataFrame":
 
     Returns:
         A ``pandas.DataFrame`` with columns: ``sample_id``, ``sample_name``,
-        ``sample_type``, ``SQR``, ``SQRP``, ``library``, ``antibody_class``,
+        ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``, ``library``,
+        ``antibody_class``,
         ``visit_id``, ``timepoint``, ``subject_id``, ``subject_code``,
         ``project_id``.
 
@@ -383,7 +389,8 @@ def list_inputs(cur) -> "pd.DataFrame":
     """
     pd = _pd()
     cur.execute(
-        "SELECT s.sample_id, s.sample_name, s.sample_type, s.SQR, s.SQRP, "
+        "SELECT s.sample_id, s.sample_name, s.sample_type, "
+        "s.IPR, s.IPRP, s.SQR, s.SQRP, "
         "s.library, s.antibody_class, "
         "v.visit_id, v.timepoint, "
         "sub.subject_id, sub.subject_code, ps.project_id "

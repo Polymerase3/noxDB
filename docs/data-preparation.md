@@ -98,14 +98,14 @@ same plate. Input samples go here too if you have them.
 
 ```
 sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library,antibody_class,meta_batch
-R25P01_01_IBD001_IBD_VIE_A_T_C2,IBD_VIE_001,baseline,sample,25,01,A_T_C2,,1
-R25P01_02_IBD002_IBD_VIE_A_T_C2,IBD_VIE_001,week12,sample,25,01,A_T_C2,,1
-R25P01_03_IBD003_IBD_VIE_A_T_C2,IBD_VIE_002,baseline,sample,25,01,A_T_C2,,1
-R25P01_04_IBD004_IBD_VIE_A_T_C2,IBD_VIE_003,baseline,sample,25,01,A_T_C2,,1
-R25P01_81_Mock_1_A_T_C2,R25P01_81_Mock_1_A_T_C2,baseline,mockIP,25,01,A_T_C2,,
-R25P01_82_Mock_2_A_T_C2,R25P01_82_Mock_2_A_T_C2,baseline,mockIP,25,01,A_T_C2,,
-R25P01_85_Anchor_1_A_T_C2,R25P01_85_Anchor_1_A_T_C2,baseline,anchor,25,01,A_T_C2,,
-R25P01_89_NC_1_A_T_C2,R25P01_89_NC_1_A_T_C2,baseline,NC,25,01,A_T_C2,,
+R25P01_01_IBD001_IBD_VIE_A_T_C2,IBD_VIE_001,baseline,sample,12,03,A_T_C2,,1
+R25P01_02_IBD002_IBD_VIE_A_T_C2,IBD_VIE_001,week12,sample,12,03,A_T_C2,,1
+R25P01_03_IBD003_IBD_VIE_A_T_C2,IBD_VIE_002,baseline,sample,12,03,A_T_C2,,1
+R25P01_04_IBD004_IBD_VIE_A_T_C2,IBD_VIE_003,baseline,sample,12,03,A_T_C2,,1
+R25P01_81_Mock_1_A_T_C2,R25P01_81_Mock_1_A_T_C2,baseline,mockIP,12,03,A_T_C2,,
+R25P01_82_Mock_2_A_T_C2,R25P01_82_Mock_2_A_T_C2,baseline,mockIP,12,03,A_T_C2,,
+R25P01_85_Anchor_1_A_T_C2,R25P01_85_Anchor_1_A_T_C2,baseline,anchor,12,03,A_T_C2,,
+R25P01_89_NC_1_A_T_C2,R25P01_89_NC_1_A_T_C2,baseline,NC,12,03,A_T_C2,,
 ```
 
 | Column | Required | Allowed values | Notes |
@@ -114,11 +114,24 @@ R25P01_89_NC_1_A_T_C2,R25P01_89_NC_1_A_T_C2,baseline,NC,25,01,A_T_C2,,
 | `subject_code` | **yes** | — | Must match `subjects.csv` for real samples. For controls, repeat the `sample_name` in this column (controls have no subject). |
 | `timepoint` | **yes** | — | Must match `visits.csv` for real samples. Use `baseline` for controls. |
 | `sample_type` | **yes** | `sample` `mockIP` `anchor` `NC` `input` | See table below. |
-| `sqr` | **yes** | integer string | SQR number from your run sheet (zero-pad to 2 digits, e.g. `07`). |
-| `sqrp` | **yes** | integer string | SQRP number. Leave empty for input samples if not applicable. |
+| `sqr` | **yes** | integer string | **Sequencing** run number from your run sheet (zero-pad to 2 digits, e.g. `07`). Not the `Rxx` in the sample name — see below. |
+| `sqrp` | **yes** | integer string | **Sequencing** plate within that run. Leave empty for input samples if not applicable. |
 | `library` | **yes** | e.g. `A_T_C2` | Library combination string from your run sheet. |
 | `antibody_class` | no | free text | Only relevant for antibody-capture assays. |
 | `meta_*` | no | any | Sample-level metadata. |
+
+!!! warning "`sqr` is not the `Rxx` in the sample name"
+
+    A sample name like `R14P02_77_FAU0001_..` carries the
+    **immunoprecipitation** run and plate, `R14` and `P02`. The
+    sequencing coordinates are a different system entirely: this sample
+    was sequenced as run `07`, plate `02`. Read `sqr` / `sqrp` off the
+    run sheet and never off the name.
+
+    You do not supply the IP coordinates. noxDB reads them from
+    `sample_name` when the row is inserted and stores them in `IPR` /
+    `IPRP`, so there is no column for them here and no way for them to
+    disagree with the name.
 
 ### sample_type values
 
@@ -234,7 +247,9 @@ metadata entry for that row.
 ## Complete dummy example
 
 Below is a self-contained example for a two-timepoint IBD project on one
-plate (SQR 25, SQRP 01).
+plate: IP plate `R25P01`, sequenced as SQR 12, SQRP 03.
+The two numberings deliberately differ here, because in real data they
+usually do.
 
 **`project.yaml`**
 
@@ -269,19 +284,19 @@ IBD_VIE_004,baseline,UC,41,,24.7
 
 ```
 sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library,antibody_class
-R25P01_01_IBD001_IBD_VIE_A_T_C2,IBD_VIE_001,baseline,sample,25,01,A_T_C2,
-R25P01_02_IBD002_IBD_VIE_A_T_C2,IBD_VIE_001,week12,sample,25,01,A_T_C2,
-R25P01_03_IBD003_IBD_VIE_A_T_C2,IBD_VIE_002,baseline,sample,25,01,A_T_C2,
-R25P01_04_IBD004_IBD_VIE_A_T_C2,IBD_VIE_003,baseline,sample,25,01,A_T_C2,
-R25P01_05_IBD005_IBD_VIE_A_T_C2,IBD_VIE_004,baseline,sample,25,01,A_T_C2,
-R25P01_81_Mock_1_A_T_C2,R25P01_81_Mock_1_A_T_C2,baseline,mockIP,25,01,A_T_C2,
-R25P01_82_Mock_2_A_T_C2,R25P01_82_Mock_2_A_T_C2,baseline,mockIP,25,01,A_T_C2,
-R25P01_83_Mock_3_A_T_C2,R25P01_83_Mock_3_A_T_C2,baseline,mockIP,25,01,A_T_C2,
-R25P01_84_Mock_4_A_T_C2,R25P01_84_Mock_4_A_T_C2,baseline,mockIP,25,01,A_T_C2,
-R25P01_85_Anchor_1_A_T_C2,R25P01_85_Anchor_1_A_T_C2,baseline,anchor,25,01,A_T_C2,
-R25P01_86_Anchor_2_A_T_C2,R25P01_86_Anchor_2_A_T_C2,baseline,anchor,25,01,A_T_C2,
-R25P01_89_NC_1_A_T_C2,R25P01_89_NC_1_A_T_C2,baseline,NC,25,01,A_T_C2,
-R25P01_90_NC_2_A_T_C2,R25P01_90_NC_2_A_T_C2,baseline,NC,25,01,A_T_C2,
+R25P01_01_IBD001_IBD_VIE_A_T_C2,IBD_VIE_001,baseline,sample,12,03,A_T_C2,
+R25P01_02_IBD002_IBD_VIE_A_T_C2,IBD_VIE_001,week12,sample,12,03,A_T_C2,
+R25P01_03_IBD003_IBD_VIE_A_T_C2,IBD_VIE_002,baseline,sample,12,03,A_T_C2,
+R25P01_04_IBD004_IBD_VIE_A_T_C2,IBD_VIE_003,baseline,sample,12,03,A_T_C2,
+R25P01_05_IBD005_IBD_VIE_A_T_C2,IBD_VIE_004,baseline,sample,12,03,A_T_C2,
+R25P01_81_Mock_1_A_T_C2,R25P01_81_Mock_1_A_T_C2,baseline,mockIP,12,03,A_T_C2,
+R25P01_82_Mock_2_A_T_C2,R25P01_82_Mock_2_A_T_C2,baseline,mockIP,12,03,A_T_C2,
+R25P01_83_Mock_3_A_T_C2,R25P01_83_Mock_3_A_T_C2,baseline,mockIP,12,03,A_T_C2,
+R25P01_84_Mock_4_A_T_C2,R25P01_84_Mock_4_A_T_C2,baseline,mockIP,12,03,A_T_C2,
+R25P01_85_Anchor_1_A_T_C2,R25P01_85_Anchor_1_A_T_C2,baseline,anchor,12,03,A_T_C2,
+R25P01_86_Anchor_2_A_T_C2,R25P01_86_Anchor_2_A_T_C2,baseline,anchor,12,03,A_T_C2,
+R25P01_89_NC_1_A_T_C2,R25P01_89_NC_1_A_T_C2,baseline,NC,12,03,A_T_C2,
+R25P01_90_NC_2_A_T_C2,R25P01_90_NC_2_A_T_C2,baseline,NC,12,03,A_T_C2,
 ```
 
 **`files/manifest.csv`** *(optional)*
