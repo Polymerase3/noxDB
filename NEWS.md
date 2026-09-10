@@ -10,6 +10,34 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-09-10
+
+Closes the loop on the plate-coordinate work: 0.7.3 shipped the tooling
+fixes, the production data was backfilled by hand, and this stops the
+importer from reintroducing the drift on the next run.
+
+### Added
+- `samples.plate_coords_from_name`: reads the `(SQR, SQRP)` plate
+  coordinates out of a sample name. `R42P02_09_..` is run 42 plate 02, and
+  a run-only name such as `R31_input1_01_..` is run 31 with no plate.
+
+### Changed
+- `scripts/prepare_migration.py` and `scripts/add_controls.py` now derive
+  the plate coordinates from the sample name instead of reading them from
+  the manifest CSV. The filename is the authoritative plate identity: it
+  matches the physical 96-file plates on disk, while manifest coordinates
+  were found to collide, putting two different plates on one key. Both
+  scripts report rows where the CSV disagrees, and fall back to the CSV
+  only when a name carries no coordinates at all.
+- `samples.canonical_plate_id` now zero-pads a purely numeric identifier to
+  two characters. Padding used to be preserved verbatim, so `5` and `05`
+  described one physical plate as two; because control linking matches by
+  exact string, that split left PIC_MUW, SAR_MUW and SNMG with no controls
+  and misattributed others. Non-numeric and wider values are unchanged.
+- `scripts/add_controls.py`'s plate key runs through the same
+  canonicalization as the study samples rather than its own verbatim
+  strip, so the two sides cannot drift apart again.
+
 ## [0.7.3] - 2026-09-10
 
 ### Fixed
