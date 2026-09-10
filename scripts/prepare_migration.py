@@ -16,12 +16,13 @@ Outputs (inside <output_dir>):
     files/manifest.csv
     _warnings.txt       rows that needed special handling
 
-SQR / SQRP are derived from the SampleName (``R42P02_..`` is run 42
-plate 02), not read from the meta CSV: the filename is the authoritative
-plate identity here, while manifest coordinates have been seen to put two
-different plates on one key. The CSV columns are still read, and any
-disagreement is reported in _warnings.txt; they are used only when a name
-carries no coordinates at all.
+SQR / SQRP are read from the meta CSV, because they are the *sequencing*
+run and plate and nothing in the sample name encodes them. The
+``RxxPxx`` in the name is the IP run and plate, a different coordinate
+system; ``samples.create`` derives ``IPR``/``IPRP`` from the name on
+insert, so this script does not emit them. 0.7.3 conflated the two and
+backfilled IP values into SQR/SQRP — see ``NEWS.md`` for 0.8.0. A row
+with no SQR is reported in _warnings.txt and imports blank.
 
 LISC file paths are constructed as:
     <lisc_root>/counts/{SampleName}.count.gz   → file_type=counts
@@ -37,7 +38,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from noxdb.samples import plate_coords_from_name
 
 # --------------------------------------------------------------------------- #
 # Constants
@@ -309,24 +309,14 @@ def process_meta_files(
                     continue
                 seen_samples.add(sample_name)
 
-                csv_sqr  = (row.get("SQR")  or "").strip()
-                csv_sqrp = (row.get("SQRP") or "").strip()
-                derived  = plate_coords_from_name(sample_name)
-                if derived is None:
-                    sqr, sqrp = csv_sqr, csv_sqrp
+                sqr  = (row.get("SQR")  or "").strip()
+                sqrp = (row.get("SQRP") or "").strip()
+                if not sqr:
                     warnings.append(
-                        f"{meta_file.name} row {row_num}: no plate coordinates in "
-                        f"sample_name {sample_name!r} — fell back to the CSV "
-                        f"(SQR={csv_sqr!r}, SQRP={csv_sqrp!r})"
+                        f"{meta_file.name} row {row_num}: no SQR for "
+                        f"{sample_name!r} — the sequencing run is only "
+                        f"knowable from the sheet, so this row imports blank"
                     )
-                else:
-                    sqr, sqrp = derived
-                    if (csv_sqr or csv_sqrp) and (csv_sqr, csv_sqrp) != (sqr, sqrp):
-                        warnings.append(
-                            f"{meta_file.name} row {row_num}: CSV says SQR={csv_sqr!r} "
-                            f"SQRP={csv_sqrp!r}, sample_name {sample_name!r} says "
-                            f"SQR={sqr!r} SQRP={sqrp!r} — used the name"
-                        )
                 lib   = _extract_library(sample_name)
 
                 samples_rows.append({

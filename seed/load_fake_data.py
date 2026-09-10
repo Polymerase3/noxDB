@@ -71,6 +71,8 @@ def insert_sample(
     library: str,
     antibody_class: str | None,
 ) -> int:
+    # IPR/IPRP are left to their '' default: these fake names carry no
+    # RxxPxx, so there is no IP plate to record.
     cur.execute(
         "INSERT INTO samples "
         "(visit_id, sample_name, sample_type, SQR, SQRP, library, antibody_class) "

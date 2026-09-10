@@ -375,3 +375,58 @@ def test_missing_required_column(tmp_path, clean_db, fake_tier_roots):
     with pytest.raises(ValueError) as exc:
         import_project_from_dir(proj, log_dir=tmp_path / "logs")
     assert "missing required columns" in str(exc.value)
+
+
+def test_control_autolink_follows_the_ip_plate(tmp_path, clean_db, fake_tier_roots):
+    """A control is linked to a project by shared IP plate, not run.
+
+    The control and the study sample sit on IP plate R21P03 but were
+    sequenced in different runs (08 vs 09). Before 0.8.0 the auto-link
+    keyed on SQR/SQRP and would have missed this pair; keying on
+    IPR/IPRP finds it, which is the physical relationship — the control
+    is well 81 of the very plate the study sample is on.
+    """
+    # The control lands first, under its own project.
+    ctrl_dir = tmp_path / "ctrlproj"
+    ctrl_dir.mkdir()
+    (ctrl_dir / "project.yaml").write_text(PROJECT_YAML.format(name="ctrl_home"))
+    (ctrl_dir / "subjects.csv").write_text("subject_code,sex,origin\nC_1,,\n")
+    (ctrl_dir / "visits.csv").write_text(
+        "subject_code,timepoint,group_test,age\nC_1,baseline,ctrl,\n"
+    )
+    (ctrl_dir / "samples.csv").write_text(
+        "sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library\n"
+        "R21P03_81_Mock_1_A_T_C2,C_1,baseline,mockIP,08,01,libA\n"
+    )
+    (ctrl_dir / "files").mkdir()
+    (ctrl_dir / "files" / "manifest.csv").write_text(
+        "sample_name,file_path,file_type,storage_tier\n"
+    )
+    import_project_from_dir(ctrl_dir)
+
+    # The study sample: same IP plate, a different sequencing run.
+    study_dir = tmp_path / "studyproj"
+    study_dir.mkdir()
+    (study_dir / "project.yaml").write_text(PROJECT_YAML.format(name="study_home"))
+    (study_dir / "subjects.csv").write_text("subject_code,sex,origin\nS_1,F,AT\n")
+    (study_dir / "visits.csv").write_text(
+        "subject_code,timepoint,group_test,age\nS_1,baseline,tx,40\n"
+    )
+    (study_dir / "samples.csv").write_text(
+        "sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library\n"
+        "R21P03_07_SUBJ_A_T_C2,S_1,baseline,sample,09,05,libA\n"
+    )
+    (study_dir / "files").mkdir()
+    (study_dir / "files" / "manifest.csv").write_text(
+        "sample_name,file_path,file_type,storage_tier\n"
+    )
+    import_project_from_dir(study_dir)
+
+    linked = execute(
+        "SELECT s.sample_name FROM project_samples ps "
+        "JOIN samples s  ON s.sample_id  = ps.sample_id "
+        "JOIN projects p ON p.project_id = ps.project_id "
+        "WHERE p.project_name = ? AND s.sample_type = 'mockIP'",
+        ("study_home",),
+    )
+    assert [r["sample_name"] for r in linked] == ["R21P03_81_Mock_1_A_T_C2"]

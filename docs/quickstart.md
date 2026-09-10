@@ -163,7 +163,7 @@ with transaction() as cur:
 `n_samples` counts **every** sample linked to the project via
 `project_samples`, controls included — here 111 study + 64 controls =
 175. `n_controls` / `controls_by_type` break out just the control
-subset (matched onto the project's plates by SQR + SQRP at import /
+subset (matched onto the project's IP plates by IPR + IPRP at import /
 migration time).
 
 ---
@@ -181,12 +181,19 @@ with transaction() as cur:
     df = queries.samples_for_project(cur, project_id=7)
 ```
 
-| project_id | subject_id | subject_code                       | visit_id | timepoint | sample_id | sample_name                        | sample_type | SQR | SQRP | library | antibody_class |
-|------------|------------|------------------------------------|----------|-----------|-----------|------------------------------------|-------------|-----|------|---------|----------------|
-| 7          | 649        | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | 649      | baseline  | 649       | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | sample      | 14  | 02   | A_T_C2  | None           |
-| …          | …          | …                                  | …        | …         | …         | …                                  | …           | …   | …    | …       | …              |
-| 7          | 14926      | R14P02_81_Mock_1_A_T_C2            | 15838    | baseline  | 15838     | R14P02_81_Mock_1_A_T_C2            | mockIP      | 14  | 02   | A_T_C2  | None           |
-| …          | …          | …                                  | …        | …         | …         | …                                  | …           | …   | …    | …       | …              |
+| project_id | subject_id | subject_code                       | visit_id | timepoint | sample_id | sample_name                        | sample_type | IPR | IPRP | SQR | SQRP | library | antibody_class |
+|------------|------------|------------------------------------|----------|-----------|-----------|------------------------------------|-------------|-----|------|-----|------|---------|----------------|
+| 7          | 649        | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | 649      | baseline  | 649       | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | sample      | 14  | 02   | 07  | 02   | A_T_C2  | None           |
+| 7          | 655        | R19P04_14_MG0213_ADMCI_NED_A_T_C2  | 655      | baseline  | 655       | R19P04_14_MG0213_ADMCI_NED_A_T_C2  | sample      | 19  | 04   | 14  | 05   | A_T_C2  | None           |
+| …          | …          | …                                  | …        | …         | …         | …                                  | …           | …   | …    | …   | …    | …       | …              |
+| 7          | 14926      | R14P02_81_Mock_1_A_T_C2            | 15838    | baseline  | 15838     | R14P02_81_Mock_1_A_T_C2            | mockIP      | 14  | 02   | 07  | 02   | A_T_C2  | None           |
+| …          | …          | …                                  | …        | …         | …         | …                                  | …           | …   | …    | …   | …    | …       | …              |
+
+`IPR`/`IPRP` are the immunoprecipitation plate, read from the sample
+name. `SQR`/`SQRP` are the sequencing plate, which comes from the run
+sheet. They are different numbers for the same row, and the second row
+above shows a third pairing again. See
+[Two coordinate systems](schema.md#two-coordinate-systems).
 
 175 rows total (111 `sample` + 32 `mockIP` + 16 `anchor` + 16 `NC`).
 
@@ -272,7 +279,9 @@ with transaction() as cur:
   "visit_id": 649,
   "sample_name": "R14P02_77_FAU0001_ADMCI_NED_A_T_C2",
   "sample_type": "sample",
-  "SQR": "14",
+  "IPR": "14",
+  "IPRP": "02",
+  "SQR": "07",
   "SQRP": "02",
   "library": "A_T_C2",
   "antibody_class": null,
@@ -292,7 +301,14 @@ with transaction() as cur:
     dfm = queries.samples_with_metadata(cur, project_id=7)
 ```
 
-175 rows × 16 columns.
+175 rows × 18 columns:
+
+```
+['project_id', 'subject_id', 'subject_code', 'visit_id', 'timepoint',
+ 'sample_id', 'sample_name', 'sample_type', 'IPR', 'IPRP', 'SQR', 'SQRP',
+ 'library', 'antibody_class', 'Ethnicity', 'Race', 'BMI',
+ 'SPPB_high_or_low']
+```
 
 ---
 
@@ -329,16 +345,16 @@ with transaction() as cur:
     dft = queries.project_tidy_table(cur, project_id=7)
 ```
 
-Shape: 175 rows × 16 columns.
+Shape: 175 rows × 18 columns, the same set as §8.
 
 ---
 
 ## 11. Plate controls for a project
 
 Controls (mockIP, anchor, NC) have no project of their own — they are
-linked to every study project sharing their plate through
+linked to every study project sharing their IP plate through
 `project_samples` (done at import / migration time, matched by
-SQR + SQRP). Because a plate can span multiple projects the same
+IPR + IPRP). Because a plate can span multiple projects the same
 control appears for several projects: one underlying row, many
 membership links. The `project_id` column is therefore the queried
 project.
@@ -355,11 +371,11 @@ anchor    16
 mockIP    32
 ```
 
-| sample_id | sample_name              | sample_type | SQR | SQRP | library | project_id |
-|-----------|--------------------------|-------------|-----|------|---------|------------|
-| 15838     | R14P02_81_Mock_1_A_T_C2  | mockIP      | 14  | 02   | A_T_C2  | 7          |
-| 15841     | R14P02_82_Mock_2_A_T_C2  | mockIP      | 14  | 02   | A_T_C2  | 7          |
-| …         | …                        | …           | …   | …    | …       | …          |
+| sample_id | sample_name              | sample_type | IPR | IPRP | SQR | SQRP | library | project_id |
+|-----------|--------------------------|-------------|-----|------|-----|------|---------|------------|
+| 15838     | R14P02_81_Mock_1_A_T_C2  | mockIP      | 14  | 02   | 07  | 02   | A_T_C2  | 7          |
+| 15841     | R14P02_82_Mock_2_A_T_C2  | mockIP      | 14  | 02   | 07  | 02   | A_T_C2  | 7          |
+| …         | …                        | …           | …   | …    | …   | …    | …       | …          |
 
 64 controls total (32 `mockIP` + 16 `anchor` + 16 `NC`).
 
@@ -384,11 +400,11 @@ with transaction() as cur:
     dfi = queries.list_inputs(cur)
 ```
 
-| sample_id | sample_name         | sample_type | SQR | SQRP | library | project_id |
-|-----------|---------------------|-------------|-----|------|---------|------------|
-| 15640     | R02_input_01_A_T_C2 | input       | 02  |      | A_T_C2  | 58         |
-| 15643     | R02_input_02_A_T_C2 | input       | 02  |      | A_T_C2  | 58         |
-| …         | …                   | …           | …   | …    | …       | …          |
+| sample_id | sample_name         | sample_type | IPR | IPRP | SQR | SQRP | library | project_id |
+|-----------|---------------------|-------------|-----|------|-----|------|---------|------------|
+| 15640     | R02_input_01_A_T_C2 | input       | 02  |      | 02  |      | A_T_C2  | 58         |
+| 15643     | R02_input_02_A_T_C2 | input       | 02  |      | 02  |      | A_T_C2  | 58         |
+| …         | …                   | …           | …   | …    | …   | …    | …       | …          |
 
 144 input rows total, in three series: `R02_input` (24), `R20_input` (24)
 and `R31_input` (96). The `R31` series has `counts` files only — no
@@ -514,7 +530,7 @@ Output directory layout:
 ```
 exports/ADMCI_NED/
 ├── README.txt     (209 bytes)
-└── metadata.csv   (24,096 bytes)
+└── metadata.csv   (25,155 bytes)
 ```
 
 `README.txt`:

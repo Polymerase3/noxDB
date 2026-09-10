@@ -5,15 +5,15 @@ Redesigned for the **schema 003 cross-project samples** model.
 
 Controls (mockIP, anchor, NC) have **no project of their own** — schema
 003 deleted the dedicated control projects. A control belongs to every
-study project whose real samples share its plate, expressed through the
-``project_samples`` junction. The importer (``noxdb._import.runner``)
-auto-links any control already in the DB to a bundle when their SQR+SQRP
-match, and the 003 migration backfilled the same relationship for
-historical data.
+study project whose real samples share its **IP plate**, expressed
+through the ``project_samples`` junction. The importer
+(``noxdb._import.runner``) auto-links any control already in the DB to a
+bundle when their IPR+IPRP match, and the 003 migration backfilled the
+same relationship for historical data.
 
 So instead of inventing control projects, this script:
 
-  * builds a ``(SQR, SQRP) -> {study project_name}`` map from the real
+  * builds an ``(IPR, IPRP) -> {study project_name}`` map from the real
     (``sample_type == 'sample'``) rows already in ``samples.csv``;
   * for each mockIP/anchor/NC control, emits its subject/visit/sample/
     file rows **once per study project that shares its plate**, so each
@@ -24,11 +24,11 @@ So instead of inventing control projects, this script:
   * ``input`` samples still go to the dedicated ``input`` project, which
     schema 003 keeps (``queries.list_inputs`` depends on it).
 
-SQR/SQRP come from the control's own SampleName, canonicalized through
-``noxdb.samples`` exactly as prepare_migration.py does for the study
-samples — both sides must agree byte-for-byte or the plate match misses.
-The Overview CSV's own columns are used only for a control whose name
-carries no coordinates.
+The IP coordinates come from each SampleName's ``RxxPxx``, canonicalized
+through ``noxdb.samples`` on both sides — they must agree byte-for-byte
+or the plate match misses. The Overview CSV's SQR/SQRP columns are the
+*sequencing* run and plate and play no part in matching; a control and
+the samples it controls for share a plate, not necessarily a run.
 
 Safe to re-run: already-present sample_names are silently skipped.
 
@@ -43,7 +43,7 @@ import csv
 import sys
 from pathlib import Path
 
-from noxdb.samples import canonical_plate_id, plate_coords_from_name
+from noxdb.samples import canonical_plate_id, ip_coords_from_name
 
 DEFAULT_LISC_ROOT = "/lisc/data/work/ccr/mariaDB"
 STORAGE_TIER = "work"
@@ -84,9 +84,9 @@ def _strip_sample_prefix(name: str) -> str:
     return name[7:] if name.startswith("Sample_") else name
 
 
-def _plate(sqr: str, sqrp: str) -> tuple[str, str]:
-    """Canonical plate key, matching what the study samples are stored under."""
-    return (canonical_plate_id(sqr), canonical_plate_id(sqrp))
+def _plate(ipr: str, iprp: str) -> tuple[str, str]:
+    """Canonical IP plate key, matching what study samples are stored under."""
+    return (canonical_plate_id(ipr), canonical_plate_id(iprp))
 
 
 def _read_csv_set(path: Path, *cols: str) -> set[tuple]:
@@ -98,11 +98,14 @@ def _read_csv_set(path: Path, *cols: str) -> set[tuple]:
 
 
 def _build_plate_to_projects(samples_csv: Path) -> dict[tuple[str, str], set[str]]:
-    """Map ``(SQR, SQRP) -> {study project_name}`` from real samples.
+    """Map ``(IPR, IPRP) -> {study project_name}`` from real samples.
 
-    Only ``sample_type == 'sample'`` rows define plate ownership — this
-    mirrors the 003 migration's Backfill 3, which joined controls to
-    study samples on ``study_sm.sample_type = 'sample'``.
+    Keyed on the IP plate, read from each sample's name: a control
+    belongs to the plate it was pipetted onto, not to whichever
+    sequencing run happened to read it. Only ``sample_type == 'sample'``
+    rows define plate ownership — this mirrors the 003 migration's
+    Backfill 3, which joined controls to study samples on
+    ``study_sm.sample_type = 'sample'``.
     """
     out: dict[tuple[str, str], set[str]] = {}
     if not samples_csv.exists():
@@ -112,7 +115,10 @@ def _build_plate_to_projects(samples_csv: Path) -> dict[tuple[str, str], set[str
         for row in reader:
             if (row.get("sample_type") or "").strip() != "sample":
                 continue
-            key = _plate(row.get("sqr", ""), row.get("sqrp", ""))
+            coords = ip_coords_from_name(row.get("sample_name", ""))
+            if coords is None:
+                continue
+            key = _plate(*coords)
             out.setdefault(key, set()).add((row.get("project_name") or "").strip())
     return out
 
@@ -185,8 +191,7 @@ def main(argv: list[str] | None = None) -> int:
 
     n_skipped = 0
     orphans: list[tuple[str, str, str]] = []  # (sample_name, sqr, sqrp)
-    n_name_override = 0   # Overview CSV disagreed with the SampleName
-    n_name_fallback = 0   # SampleName carried no coordinates at all
+    n_no_ip_coords = 0    # SampleName carried no IP coordinates at all
 
     print(f"Scanning {overview_path.name}...")
 
@@ -209,13 +214,9 @@ def main(argv: list[str] | None = None) -> int:
             if sample_type == "sample":
                 continue
 
-            derived = plate_coords_from_name(sample_name)
-            if derived is None:
-                n_name_fallback += 1
-            else:
-                if (sqr or sqrp) and _plate(sqr, sqrp) != derived:
-                    n_name_override += 1
-                sqr, sqrp = derived
+            ip_coords = ip_coords_from_name(sample_name)
+            if ip_coords is None:
+                n_no_ip_coords += 1
 
             if sample_name in existing_samples or sample_name in seen_samples:
                 n_skipped += 1
@@ -229,8 +230,11 @@ def main(argv: list[str] | None = None) -> int:
             if sample_type == "input":
                 target_projects = [INPUT_PROJECT]
             else:
+                if ip_coords is None:
+                    orphans.append((sample_name, sqr, sqrp))
+                    continue
                 target_projects = sorted(
-                    pn for pn in plate_to_projects.get(_plate(sqr, sqrp), set())
+                    pn for pn in plate_to_projects.get(_plate(*ip_coords), set())
                     if pn
                 )
                 if not target_projects:
@@ -340,12 +344,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  files    appended : {len(new_files)}")
     if n_skipped:
         print(f"  skipped (already exist) : {n_skipped}")
-    if n_name_override:
-        print(f"  Overview CSV disagreed with the SampleName : {n_name_override}"
-              "  (used the name)")
-    if n_name_fallback:
-        print(f"  no coordinates in the SampleName : {n_name_fallback}"
-              "  (used the Overview CSV)")
+    if n_no_ip_coords:
+        print(f"  no IP coordinates in the SampleName : {n_no_ip_coords}"
+              "  (cannot be matched to a plate)")
     if orphans:
         print(f"  ORPHAN controls (no study project shares the plate) : {len(orphans)}")
         for name, sqr, sqrp in orphans[:20]:
@@ -353,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
         if len(orphans) > 20:
             print(f"    … and {len(orphans) - 20} more")
         print("  These were NOT written. Re-run prepare_migration or check "
-              "SQR/SQRP formatting if this is unexpected.")
+              "the RxxPxx in the SampleName if this is unexpected.")
     return 0
 
 

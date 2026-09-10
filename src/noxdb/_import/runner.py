@@ -136,7 +136,7 @@ def _plate_warnings(bundle: loader.ProjectBundle) -> list[str]:
     Canonicalization (whitespace strip, ``NA``/empty → ``""``) happens
     silently in :func:`samples.create`; echoing it as an import warning
     keeps the transformation visible in the report rather than a
-    surprise when SQR+SQRP linking later behaves on the canonical form.
+    surprise when a later query behaves on the canonical form.
     Length-overflow is handled as a hard error in
     :func:`_validate_schema`, so it is swallowed here.
     """
@@ -329,25 +329,26 @@ def _commit(
             result = metadata.set_sample(cur, sid, key, val)
             counts["metadata"][result] += 1
 
-    # Auto-link plate controls: any control (mockIP/anchor/NC) that ran
-    # on the same SQR+SQRP plate as a real sample in this bundle is also
+    # Auto-link plate controls: any control (mockIP/anchor/NC) that sat
+    # on the same IP plate as a real sample in this bundle is also
     # linked to this project, so controls_for_project keeps working.
-    # Match on the canonical plate form — samples.create stored the
-    # canonical SQR/SQRP, so the WHERE keys must be canonical too.
-    sqr_sqrp = {
-        (
-            samples.canonical_plate_id(sm.sqr),
-            samples.canonical_plate_id(sm.sqrp),
-        )
-        for sm in bundle.samples
-        if sm.sample_type == "sample"
-    }
-    for sqr, sqrp in sqr_sqrp:
+    # This is an IP relationship, not a sequencing one — controls
+    # occupy wells 81-96 of the IP plate, and a plate's samples can be
+    # split across sequencing runs. Match on the canonical form, since
+    # samples.create stored canonical IPR/IPRP.
+    ip_coords = set()
+    for sm in bundle.samples:
+        if sm.sample_type != "sample":
+            continue
+        coords = samples.ip_coords_from_name(sm.sample_name)
+        if coords is not None:
+            ip_coords.add(coords)
+    for ipr, iprp in ip_coords:
         cur.execute(
             "SELECT sample_id FROM samples "
-            "WHERE SQR = ? AND SQRP = ? "
+            "WHERE IPR = ? AND IPRP = ? "
             "AND sample_type IN ('mockIP', 'anchor', 'NC')",
-            (sqr, sqrp),
+            (ipr, iprp),
         )
         for (ctrl_id,) in cur.fetchall():
             samples.link_to_project(cur, pid, ctrl_id)

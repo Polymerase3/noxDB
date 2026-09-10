@@ -15,7 +15,7 @@ from typing import Any
 # importer validates is exactly what samples.create will store.
 from noxdb.samples import canonical_plate_id
 
-# DB column width for samples.SQR / samples.SQRP (VARCHAR(10)).
+# DB column width for the coordinate columns (all VARCHAR(10)).
 _PLATE_MAX_LEN = 10
 
 # Required + optional columns per CSV (excluding meta_* keys).
@@ -115,12 +115,15 @@ def coerce_int(raw: str, *, field: str) -> int:
 
 
 def validate_plate_id(raw: str | None, *, field: str) -> tuple[str, str | None]:
-    """Validate + canonicalize an SQR / SQRP cell for import.
+    """Validate + canonicalize a sequencing coordinate cell for import.
 
     Uses the same canonicalization as
     [`samples.create`][noxdb.samples.create], so what the importer
-    accepts here is byte-identical to what gets stored — SQR+SQRP
-    plate matching can't drift between the two.
+    accepts here is byte-identical to what gets stored and coordinate
+    matching can't drift between the two.
+
+    The IP coordinates are not validated here: they are never read
+    from a CSV, only derived from the sample name.
 
     Args:
         raw: The raw cell value.

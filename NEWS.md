@@ -10,6 +10,84 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-10
+
+`SQR`/`SQRP` never held the sequencing run. They held the IP run, and
+0.7.3 put it there. This separates the two coordinate systems and
+backfills the sequencing side from the run sheet.
+
+The `RxxPxx` in a sample name is the **immunoprecipitation** run and
+plate. `SQR`/`SQRP` are the **sequencing** run and plate, which come
+from the run sheet and are encoded nowhere in the name. 0.7.3 read the
+name into `SQR`/`SQRP` on the belief that they were the same thing, and
+backfilled production accordingly: all 6722 rows held an IP coordinate
+in a column named for sequencing. Anything that grouped or filtered on
+`SQR` between 0.7.3 and this release was grouping by IP run.
+
+### Added
+- **`schema/004_ip_and_sequencing_coords.sql`** adds `samples.IPR` and
+  `samples.IPRP` and moves the existing values into them. Because every
+  current `SQR`/`SQRP` was written straight from the sample name, this
+  is a rename of the data rather than a re-derivation. It leaves
+  `SQR`/`SQRP` populated so the table is never half-described; the
+  backfill below overwrites them.
+- **`scripts/backfill_sequencing_coords.py`** generates the SQL that
+  rewrites `SQR`/`SQRP` from the `Overview_SQRs(All_SQRs)` sheet. It
+  reads only, and refuses to emit a partial backfill. Matching takes
+  two passes: exact sample name (6018 rows), then IP plate and well
+  (704 rows) for the names the sheet spells differently — hyphens for
+  underscores inside a subject id, a different project label, a
+  `_REPEAT` suffix.
+- **`samples.ip_coords_from_name`**, the renamed
+  `plate_coords_from_name`. Same parsing, a name that says what it
+  returns. The old name is gone rather than aliased: it was the
+  ambiguity that caused this.
+- Tests for the derivation, for `update` correcting a stored pair, and
+  a regression test that a control on a shared IP plate is auto-linked
+  even when its sequencing run differs from the study sample's.
+
+### Changed
+- **Control auto-linking keys on `IPR`/`IPRP`.** A control occupies
+  wells 81-96 of the plate it controls for, so this was always an IP
+  relationship. Production links are unaffected, because the columns it
+  used to read already held IP values. The change matters going
+  forward: on IP plates `R08P01` and `R08P02` the study wells and the
+  control wells were sequenced separately, so keying on the sequencing
+  pair would now miss them.
+- `samples.create` derives `IPR`/`IPRP` from `sample_name` instead of
+  taking them as arguments, so no caller can store a pair that
+  contradicts the name. `samples.update` can still set them to correct
+  a stored row.
+- `scripts/prepare_migration.py` reads `SQR`/`SQRP` from the meta CSV
+  again. 0.7.4 had it override those with the name, which was right
+  when the columns were believed to be one system and wrong now.
+- `queries.samples_for_project`, `controls_for_project` and
+  `list_inputs` return `IPR`/`IPRP` alongside `SQR`/`SQRP`.
+  `controls_for_project` orders by the IP plate it selected on.
+- `docs/schema.md` and `docs/data-preparation.md` document both
+  systems. The worked example now gives an IP plate and a sequencing
+  plate with different numbers, since the old one used the same digits
+  for both and taught the confusion this release fixes.
+- `docs/quickstart.md` regenerated from `scripts/probe_quickstart.py`
+  against the backfilled database. Every count is unchanged; what moved
+  is the coordinates. `R14P02_77_..` now reads IPR 14, IPRP 02, SQR 07,
+  SQRP 02 where it used to read SQR 14, SQRP 02. The `metadata.csv`
+  export grew from 24,096 to 25,155 bytes, being two columns wider.
+
+### Notes
+- 32 control wells appear twice in the sheet, sequenced in two runs,
+  while only one measurement per well exists in the database. The
+  backfill takes the later run. On `R08P01` and `R08P02` that puts
+  those controls on a different sequencing plate from the study wells
+  of their own IP plate; which of the two runs produced the stored
+  counts file is not recorded anywhere.
+- Applied to `ccr_metadata` on 2026-09-10. All 6722 rows verified
+  afterwards: every `SQR`/`SQRP` matches the intended backfill, every
+  `IPR`/`IPRP` matches its sample name, and every control link still
+  shares an IP plate with a study sample of its project. Sequencing
+  runs now span 02-31 across 23 distinct runs, where the IP numbering
+  spanned 02-47 across 40.
+
 ## [0.7.5] - 2026-09-10
 
 Monitoring sweep gains the checks it was missing. Closes #2.
