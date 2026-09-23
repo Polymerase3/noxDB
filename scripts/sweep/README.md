@@ -117,6 +117,34 @@ source ~/noxdb-venv/bin/activate
 python ~/noxdb/scripts/sweep/noxdb_sweep.py --mode manual
 ```
 
+## 8. Sequencing master sheet (coverage check)
+
+The `coverage` check (`sqr_coverage.py`, next to this script) compares a
+master sheet of every well the lab sequenced with noxDB. It reads
+`/lisc/data/work/ccr/mariaDB/master_sequenced_samples.csv` unless
+`NOXDB_MASTER_SHEET` points elsewhere; export that in the crontab if the
+sheet lives somewhere else. A missing sheet makes the check warn, not crash.
+
+Columns it uses: `sqr, sqrp, sheet_name, seq_name, kind, label,
+status_note, has_counts, has_fastq, has_bam, has_parquet`. Refresh the sheet
+whenever a new sequencing run is added to the run sheet; the check warns when
+noxDB contains samples the sheet has never heard of.
+
+Full report on demand:
+
+```bash
+~/noxdb-venv/bin/python ~/noxdb/scripts/sweep/sqr_coverage.py --out ~/logs/coverage.csv
+```
+
+## 9. Metadata completeness
+
+The `metadata` check (`metadata_completeness.py`, next to this script) needs
+no extra setup. Full per-project table on demand:
+
+```bash
+~/noxdb-venv/bin/python ~/noxdb/scripts/sweep/metadata_completeness.py --out ~/logs/completeness.csv
+```
+
 ## What each mode checks
 
 | Check | heartbeat | weekly | monthly | manual |
@@ -133,6 +161,8 @@ python ~/noxdb/scripts/sweep/noxdb_sweep.py --mode manual
 | DB→disk drift (registered files missing on disk) | | ✓ | ✓ | ✓ |
 | Disk→DB drift (walks the registered directories) | | | ✓ | ✓ |
 | Audit log summary (writes in last 7d) | | ✓ | ✓ | ✓ |
+| Sequencing coverage (master sheet vs noxDB, per SQR and project) | | ✓ | ✓ | ✓ |
+| Metadata completeness (sex / age / group / longitudinal, per project) | | ✓ | ✓ | ✓ |
 | 30-day uptime % | | | ✓ | |
 
 Every report ends with the run's own metadata: start time, duration, CPU

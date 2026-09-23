@@ -87,6 +87,26 @@ report.
 - **Audit log** — tails `~/.noxdb/audit.log` and counts writes per table
   over the last 7 days, as a lightweight "is this thing actually being
   used" signal.
+- **Sequencing coverage** — how much of what the lab ever sequenced is in
+  noxDB. `scripts/sweep/sqr_coverage.py` reads a master sheet of every
+  sequenced well (default `/lisc/data/work/ccr/mariaDB/master_sequenced_samples.csv`,
+  override with `NOXDB_MASTER_SHEET`) and matches it against `samples`,
+  tolerating the run sheet's different spellings of the same name. The
+  report gives samples in noxDB per sequencing run and lists the run-sheet
+  projects that are only partly or not at all imported, with the reason
+  recorded in the sheet (e.g. held for metadata). Coverage gaps are expected
+  and never fail the sweep; the check warns only if the master sheet is
+  missing or noxDB holds samples the sheet does not know, which means the
+  sheet is out of date. Run it on its own for the full report:
+  `python scripts/sweep/sqr_coverage.py [--out report.csv]`.
+- **Metadata completeness** — per project, over study samples only:
+  the share of subjects with sex, of visits with an age and with a real
+  group (not empty or `unknown`), whether the project is longitudinal (a
+  subject with more than one timepoint), which `visit_metadata` fields exist
+  and how complete each is, and the share of samples with a counts file.
+  The report lists the least complete projects first. Informational only:
+  missing metadata is a curation gap, not a fault. Full table on demand:
+  `python scripts/sweep/metadata_completeness.py [--out completeness.csv]`.
 - **Uptime %** — `monthly` only, computed from the JSONL history's liveness
   results over the trailing 30 days.
 
