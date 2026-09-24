@@ -50,6 +50,12 @@ from typing import Any
 from noxdb import close_pool, init_pool, projects, queries, transaction
 from noxdb.samples import ip_coords_from_name
 
+# sqr_coverage lives next to this script; the tests load this file by path,
+# so its directory is not on sys.path by default.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import metadata_completeness  # noqa: E402
+import sqr_coverage  # noqa: E402
+
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
@@ -86,17 +92,17 @@ CHECK_SETS: dict[str, list[str]] = {
     "weekly": [
         "liveness", "row_counts", "schema_fingerprint", "population", "integrity",
         "orphans", "duplicates", "activity", "db_size",
-        "db_files_missing_on_disk", "audit_log",
+        "db_files_missing_on_disk", "audit_log", "coverage", "metadata",
     ],
     "monthly": [
         "liveness", "row_counts", "schema_fingerprint", "population", "integrity",
         "orphans", "duplicates", "activity", "db_size",
-        "db_files_missing_on_disk", "disk_files_missing_in_db", "audit_log",
+        "db_files_missing_on_disk", "disk_files_missing_in_db", "audit_log", "coverage", "metadata",
     ],
     "manual": [
         "liveness", "row_counts", "schema_fingerprint", "population", "integrity",
         "orphans", "duplicates", "activity", "db_size",
-        "db_files_missing_on_disk", "disk_files_missing_in_db", "audit_log",
+        "db_files_missing_on_disk", "disk_files_missing_in_db", "audit_log", "coverage", "metadata",
     ],
 }
 
@@ -723,6 +729,53 @@ def check_db_size(cur) -> dict[str, Any]:
     }
 
 
+def check_coverage(cur) -> dict[str, Any]:
+    """How much of what the lab sequenced is in noxDB (see sqr_coverage.py).
+
+    Informational: coverage gaps are expected (projects waiting for
+    metadata) and never fail the sweep. It warns only when the master
+    sheet is missing, or when noxDB holds samples the sheet does not know
+    about, which means the sheet is stale.
+    """
+    path = sqr_coverage.master_path()
+    if not path.exists():
+        return {
+            "name": "coverage", "ok": False, "level": "warn",
+            "summary": f"master sheet not found at {path} (set {sqr_coverage.MASTER_ENV})",
+            "details": {"master_path": str(path)},
+        }
+    r = sqr_coverage.coverage_report(cur, path)
+    stale = r["db_samples_not_in_master"]
+    summary = sqr_coverage.summary_line(r)
+    if stale:
+        summary += f"; {stale} noxDB sample(s) not in the master sheet (sheet out of date?)"
+    return {
+        "name": "coverage", "ok": not stale, "level": "warn" if stale else "ok",
+        "summary": summary,
+        "details": {
+            "master_path": r["master_path"],
+            "master_age_days": round((time.time() - r["master_mtime"]) / 86400, 1),
+            "by_sqr": r["by_sqr"],
+            "incomplete_projects": [x for x in r["by_label"] if x["status"] != "complete"],
+            "file_flags": r["file_flags"],
+            "samples": r["samples"], "samples_in_db": r["samples_in_db"],
+            "sample": r["db_samples_not_in_master_sample"],
+        },
+    }
+
+
+def check_metadata(cur) -> dict[str, Any]:
+    """Per-project sex / age / group / longitudinal completeness (see
+    metadata_completeness.py). Informational: missing metadata is a curation
+    gap, not a fault, so this never warns."""
+    r = metadata_completeness.completeness_report(cur)
+    return {
+        "name": "metadata", "ok": True, "level": "ok",
+        "summary": metadata_completeness.summary_line(r),
+        "details": {"projects": metadata_completeness.worst_first(r["projects"])},
+    }
+
+
 CHECK_FUNCS = {
     "liveness": check_liveness,
     "schema_fingerprint": check_schema_fingerprint,
@@ -736,6 +789,8 @@ CHECK_FUNCS = {
     "duplicates": check_duplicates,
     "activity": check_activity,
     "db_size": check_db_size,
+    "coverage": check_coverage,
+    "metadata": check_metadata,
 }
 
 
@@ -884,6 +939,51 @@ def render_html(mode: str, results: list[dict[str, Any]], deltas: dict[str, Any]
                 "<pre style='background:#f5f5f5;padding:8px;overflow-x:auto'>"
                 + json.dumps(r["details"]["sample"], indent=2, default=str)[:3000] + "</pre>"
             )
+
+    coverage = by_name.get("coverage")
+    if coverage:
+        parts.append("<h3>Sequencing coverage</h3>")
+        parts.append(f"<p style='color:{_LEVEL_COLOR[coverage['level']]}'>{coverage['summary']}</p>")
+        d = coverage["details"]
+        if d.get("by_sqr"):
+            cells = " ".join(
+                f"SQR{k}&nbsp;{v.get('samples_in_db', 0)}/{v.get('samples', 0)}" for k, v in d["by_sqr"].items()
+            )
+            parts.append(f"<p style='color:#555;font-size:12px'>{cells}</p>")
+        missing = sorted(d.get("incomplete_projects", []), key=lambda x: -x["missing"])[:15]
+        if missing:
+            parts.append("<table cellpadding='4' style='border-collapse:collapse;font-size:12px'>"
+                         "<tr><th align='left'>project (run sheet)</th><th>in noxDB</th><th align='left'>why</th></tr>")
+            for x in missing:
+                why = "; ".join(f"{k} ({v})" for k, v in x["why_missing"].items())
+                parts.append(f"<tr><td>{x['label']}</td><td>{x['in_db']}/{x['samples']}</td>"
+                             f"<td style='color:#777'>{why}</td></tr>")
+            parts.append("</table>")
+        if d.get("master_age_days") is not None:
+            parts.append(f"<p style='color:#777;font-size:12px'>master sheet {d.get('master_path')} "
+                         f"({d['master_age_days']} days old)</p>")
+
+    md = by_name.get("metadata")
+    if md:
+        parts.append("<h3>Metadata completeness</h3>")
+        parts.append(f"<p style='color:{_LEVEL_COLOR[md['level']]}'>{md['summary']}</p>")
+        rows = md["details"].get("projects", [])
+        if rows:
+            def pct_cell(v: float) -> str:
+                colour = _LEVEL_COLOR["ok"] if v >= 90 else _LEVEL_COLOR["warn"] if v > 0 else _LEVEL_COLOR["error"]
+                return f"<td align='right' style='color:{colour}'>{v:g}%</td>"
+            parts.append("<table cellpadding='3' style='border-collapse:collapse;font-size:12px'>"
+                         "<tr><th align='left'>project</th><th>samples</th><th>sex</th><th>age</th>"
+                         "<th>group</th><th>longit.</th><th>counts</th><th align='left'>other fields</th></tr>")
+            for p in rows:
+                parts.append(
+                    f"<tr><td>{p['project']}</td><td align='right'>{p['samples']}</td>"
+                    + pct_cell(p["has_sex"]) + pct_cell(p["has_age"]) + pct_cell(p["has_group"])
+                    + f"<td align='center'>{'yes' if p['is_longitudinal'] else ''}</td>"
+                    + pct_cell(p["has_counts"])
+                    + f"<td style='color:#777'>{len(p['meta_fields'])}</td></tr>"
+                )
+            parts.append("</table>")
 
     if meta:
         parts.append(

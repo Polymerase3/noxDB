@@ -229,5 +229,6 @@ dumps/
 
 # Local data directories
 migration_import/
+metadata/
 migrations/
 notebooks/

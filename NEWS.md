@@ -10,6 +10,27 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-09-23
+
+### Added
+- **Sequencing coverage check** in the monitoring sweep (`weekly`, `monthly`,
+  `manual`). `scripts/sweep/sqr_coverage.py` compares a master sheet of every
+  well the lab sequenced with noxDB and reports samples in noxDB per
+  sequencing run, plus the run-sheet projects that are complete, partial or
+  absent, with the recorded reason for anything missing. Run sheets spell
+  names differently from what was sequenced (separators, `Sample_` prefix,
+  well zero-padding), so matching falls back to a normalised name. Gaps are
+  informational; the check warns only when the sheet is missing
+  (`NOXDB_MASTER_SHEET`, default `/lisc/data/work/ccr/mariaDB/master_sequenced_samples.csv`)
+  or noxDB holds samples the sheet lacks. Also runnable on its own for the
+  full report.
+- **Metadata completeness check** in the sweep (`weekly`, `monthly`,
+  `manual`), from `scripts/sweep/metadata_completeness.py`. Per project,
+  over study samples: share of subjects with sex, of visits with an age and
+  a real group, whether the project is longitudinal, which extra metadata
+  fields exist and how complete they are, and the share of samples with a
+  counts file. Least complete projects first; informational only.
+
 ## [0.8.0] - 2026-09-10
 
 `SQR`/`SQRP` never held the sequencing run. They held the IP run, and
