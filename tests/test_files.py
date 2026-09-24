@@ -41,7 +41,7 @@ class TestExpectedTier:
         assert _expected_tier(ft) == "archive"
 
     @pytest.mark.parametrize(
-        "ft", ["counts", "beer_norm", "zigp_norm", "edger_norm"],
+        "ft", ["counts", "beer_norm", "zigp_norm", "edger_norm", "zigp_loose"],
     )
     def test_work_types(self, ft):
         assert _expected_tier(ft) == "work"
@@ -249,6 +249,17 @@ def test_register_norm_under_work(parent_ids, roots):
         row = files.get(cur, fid)
     assert row["storage_tier"] == "work"
     assert row["file_type"] == "beer_norm"
+
+
+def test_register_zigp_loose_under_work(parent_ids, roots):
+    _, wrk = roots
+    path = _make_file(wrk / "x.csv.gz", b"\x1f\x8b")
+    with transaction() as cur:
+        fid = files.register(cur, parent_ids, path, "zigp_loose")
+    with transaction() as cur:
+        row = files.get(cur, fid)
+    assert row["storage_tier"] == "work"
+    assert row["file_type"] == "zigp_loose"
 
 
 def test_register_with_compute_md5(parent_ids, roots):

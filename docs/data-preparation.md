@@ -202,6 +202,7 @@ R25P01_01_IBD001_IBD_VIE_A_T_C2,/lisc/data/work/ccr/mariaDB/zigp/R25P01_01_IBD00
 |-------|-------------|
 | `counts` | Raw read count table (`.count.gz`) |
 | `zigp_norm` | ZIGP-normalised table (`.csv`) |
+| `zigp_loose` | ZIGP output kept to neglogp >= 2, with per-peptide parameters (`.csv.gz`) |
 | `beer_norm` | BEER-normalised table |
 | `edger_norm` | edgeR-normalised table |
 | `fastq_r1` | FASTQ read 1 |

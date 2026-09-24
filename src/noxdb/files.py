@@ -12,7 +12,8 @@ Storage tier policy
 File-type → tier is fixed by lab convention:
 
     fastq_r1 / fastq_r2 / fastq_single / bam           -> archive
-    counts / beer_norm / zigp_norm / edger_norm        -> work
+    counts / beer_norm / zigp_norm / edger_norm /
+    zigp_loose                                         -> work
 
 Roots are configurable via env vars (defaults shown):
 
@@ -34,7 +35,7 @@ from typing import Any
 import mariadb
 
 _ARCHIVE_TYPES = frozenset({"fastq_r1", "fastq_r2", "fastq_single", "bam"})
-_WORK_TYPES = frozenset({"counts", "beer_norm", "zigp_norm", "edger_norm"})
+_WORK_TYPES = frozenset({"counts", "beer_norm", "zigp_norm", "edger_norm", "zigp_loose"})
 _ALL_TYPES = _ARCHIVE_TYPES | _WORK_TYPES
 _ALL_TIERS = frozenset({"archive", "work", "scratch", "external"})
 
@@ -266,7 +267,7 @@ def register(
         file_path: Absolute path on disk.
         file_type: One of the known types (`fastq_r1`, `fastq_r2`,
             `fastq_single`, `bam`, `counts`, `beer_norm`, `zigp_norm`,
-            `edger_norm`).
+            `edger_norm`, `zigp_loose`).
         compute_md5: If ``True``, hash the file. Mutually exclusive with
             ``checksum_md5``.
         checksum_md5: Caller-supplied 32-char lowercase-hex MD5.

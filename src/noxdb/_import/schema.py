@@ -39,7 +39,7 @@ ALLOWED_SEX = frozenset({"M", "F"})
 ALLOWED_SAMPLE_TYPE = frozenset({"sample", "mockIP", "input", "anchor", "NC"})
 ALLOWED_FILE_TYPE = frozenset({
     "fastq_r1", "fastq_r2", "fastq_single", "bam", "counts",
-    "beer_norm", "zigp_norm", "edger_norm",
+    "beer_norm", "zigp_norm", "edger_norm", "zigp_loose",
 })
 ALLOWED_STORAGE_TIER = frozenset({"work", "archive", "scratch", "external"})
 

@@ -10,6 +10,16 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-24
+
+### Added
+- **`zigp_loose` file type** (`schema/005_zigp_loose_file_type.sql`). The
+  unweighted ZIGP output kept down to neglogp >= 2, with the fitted lambda,
+  theta and p_i per peptide, stored in `ccr/mariaDB/zigp_loose_cutoff/` as
+  `<name>.csv.gz`. It is the permissive list IDR needs to tune the enrichment
+  cutoff; `zigp_norm` stays the Holm padj <= 0.05 cut. Tier `work`. Run the
+  migration on `ccr_metadata` before registering any such file.
+
 ## [0.9.1] - 2026-09-24
 
 ### Added
