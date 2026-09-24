@@ -157,7 +157,7 @@ no extra setup. Full per-project table on demand:
 | Orphaned rows (samples in no project, visits with no sample) | | ✓ | ✓ | ✓ |
 | Duplicate rows (exact, and samples registered twice) | | ✓ | ✓ | ✓ |
 | Activity (new rows in the last 7d, per table and project) | | ✓ | ✓ | ✓ |
-| Database size on disk, per table | | ✓ | ✓ | ✓ |
+| Database size on disk, per table; size of each data folder under `<root>/ccr/mariaDB` on work and archive, with the change since the last run | | ✓ | ✓ | ✓ |
 | DB→disk drift (registered files missing on disk) | | ✓ | ✓ | ✓ |
 | Disk→DB drift (walks the registered directories) | | | ✓ | ✓ |
 | Audit log summary (writes in last 7d) | | ✓ | ✓ | ✓ |
