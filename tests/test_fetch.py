@@ -223,6 +223,122 @@ def test_download_files_empty_project(_init_pool, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# Tar members (schema 006), local path
+# --------------------------------------------------------------------------- #
+
+@pytest.fixture
+def project_with_tar_members(_init_pool, tmp_path):
+    """One sample whose R1/R2 FASTQs are members of a real tar."""
+    import hashlib
+    import tarfile
+
+    src = tmp_path / "src"
+    src.mkdir()
+    payloads = {"S_T1_R1.fastq.gz": b"read-one" * 500, "S_T1_R2.fastq.gz": b"read-two" * 300}
+    for name, data in payloads.items():
+        (src / name).write_bytes(data)
+    tar = tmp_path / "run.tar"
+    with tarfile.open(tar, "w") as tf:
+        for name in payloads:
+            tf.add(src / name, arcname=name)
+    with tarfile.open(tar) as tf:
+        offsets = {m.name: m.offset_data for m in tf}
+
+    with transaction() as cur:
+        wipe_all(cur)
+        pid = projects.create(cur, "TAR_P")
+        sa = subjects.create(cur, "S_T", "F")
+        va = visits.create(cur, sa, "ctrl", 30, timepoint="baseline")
+        t1 = samples.create(cur, va, "S_T1", "sample", "Q", "Q", "libA", ipr="01", iprp="01")
+        samples.link_to_project(cur, pid, t1)
+        for name, ftype in [("S_T1_R1.fastq.gz", "fastq_r1"), ("S_T1_R2.fastq.gz", "fastq_r2")]:
+            cur.execute(
+                "INSERT INTO sample_files (sample_id, file_type, file_path, archive_member, "
+                "archive_offset, file_size_bytes, checksum_md5, storage_tier) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 'archive')",
+                (t1, ftype, str(tar), name, offsets[name], len(payloads[name]),
+                 hashlib.md5(payloads[name]).hexdigest()),
+            )
+    yield {"project_id": pid, "payloads": payloads}
+    with transaction() as cur:
+        wipe_all(cur)
+
+
+def test_download_tar_members_by_offset(project_with_tar_members, tmp_path):
+    info = project_with_tar_members
+    out = tmp_path / "dl"
+    report = fetch.download_files_for_project(
+        project_id=info["project_id"], output_dir=out, config_path=None, ssh_host="",
+    )
+    assert report["failed"] == []
+    for name, data in info["payloads"].items():
+        assert (out / "S_T1" / name).read_bytes() == data
+    assert {d["archive_member"] for d in report["downloaded"]} == set(info["payloads"])
+
+
+def test_download_resequenced_sample_keeps_both_runs(project_with_tar_members, tmp_path):
+    """Two fastq_r1 rows for one sample (a second run's tar) must both arrive."""
+    import hashlib
+    import tarfile
+
+    info = project_with_tar_members
+    second = tmp_path / "reseq_R1.fastq.gz"
+    second.write_bytes(b"second-run" * 100)
+    tar2 = tmp_path / "reseq.tar"
+    with tarfile.open(tar2, "w") as tf:
+        tf.add(second, arcname="BSF_1_FC_1#S_T1_S99_R1.fastq.gz")
+    with tarfile.open(tar2) as tf:
+        offset = tf.getmember("BSF_1_FC_1#S_T1_S99_R1.fastq.gz").offset_data
+    with transaction() as cur:
+        cur.execute(
+            "INSERT INTO sample_files (sample_id, file_type, file_path, archive_member, "
+            "archive_offset, file_size_bytes, checksum_md5, storage_tier) "
+            "SELECT sample_id, 'fastq_r1', ?, ?, ?, ?, ?, 'archive' FROM samples WHERE sample_name = 'S_T1'",
+            (str(tar2), "BSF_1_FC_1#S_T1_S99_R1.fastq.gz", offset, second.stat().st_size,
+             hashlib.md5(second.read_bytes()).hexdigest()),
+        )
+    for layout, sub in (("by_sample", "S_T1"), ("by_type", "fastq_r1")):
+        out = tmp_path / f"dl_{layout}"
+        report = fetch.download_files_for_project(
+            project_id=info["project_id"], output_dir=out, layout=layout,
+            config_path=None, ssh_host="",
+        )
+        assert report["failed"] == [] and report["skipped"] == []
+        assert (out / sub / "S_T1_R1.fastq.gz").read_bytes() == info["payloads"]["S_T1_R1.fastq.gz"]
+        assert (out / sub / "BSF_1_FC_1#S_T1_S99_R1.fastq.gz").read_bytes() == second.read_bytes()
+
+
+def test_download_tar_member_without_offset_scans_tar(project_with_tar_members, tmp_path):
+    info = project_with_tar_members
+    with transaction() as cur:
+        cur.execute("UPDATE sample_files SET archive_offset = NULL")
+    out = tmp_path / "dl"
+    report = fetch.download_files_for_project(
+        project_id=info["project_id"], output_dir=out, layout="flat",
+        config_path=None, ssh_host="",
+    )
+    assert report["failed"] == []
+    for name, data in info["payloads"].items():
+        assert (out / name).read_bytes() == data
+
+
+def test_download_tar_member_md5_mismatch_fails_and_cleans_up(project_with_tar_members, tmp_path):
+    info = project_with_tar_members
+    with transaction() as cur:
+        cur.execute(
+            "UPDATE sample_files SET checksum_md5 = ? WHERE file_type = 'fastq_r1'", ("0" * 32,)
+        )
+    out = tmp_path / "dl"
+    report = fetch.download_files_for_project(
+        project_id=info["project_id"], output_dir=out, config_path=None, ssh_host="",
+    )
+    assert len(report["failed"]) == 1
+    assert "md5 mismatch" in report["failed"][0]["error"]
+    assert not (out / "S_T1" / "S_T1_R1.fastq.gz").exists()
+    assert len(report["downloaded"]) == 1
+
+
+# --------------------------------------------------------------------------- #
 # SFTP path — paramiko mocked
 # --------------------------------------------------------------------------- #
 
@@ -276,6 +392,47 @@ def test_download_files_uses_sftp_when_ssh_host_set(
     assert len(calls) == 3
     assert len(report["downloaded"]) == 3
     assert report["failed"] == []
+
+
+def test_download_tar_members_over_sftp(project_with_tar_members, tmp_path, monkeypatch):
+    """Tar members are read through sftp.open() (seek + read), never .get()."""
+    paramiko = pytest.importorskip("paramiko")
+    opened: list[str] = []
+
+    class FakeSFTP:
+        def open(self, remote, mode):
+            opened.append(remote)
+            return open(remote, mode)  # the tar is local in the test
+
+        def get(self, remote, local):
+            raise AssertionError("tar members must not be fetched with get()")
+
+        def close(self):
+            pass
+
+    class FakeClient:
+        def set_missing_host_key_policy(self, policy):
+            pass
+
+        def connect(self, **kwargs):
+            pass
+
+        def open_sftp(self):
+            return FakeSFTP()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(paramiko, "SSHClient", FakeClient)
+    info = project_with_tar_members
+    out = tmp_path / "dl_sftp"
+    report = fetch.download_files_for_project(
+        project_id=info["project_id"], output_dir=out, config_path=None,
+        ssh_host="fake.example.com", ssh_user="someone",
+    )
+    assert report["failed"] == []
+    assert len(opened) == 2
+    assert (out / "S_T1" / "S_T1_R1.fastq.gz").read_bytes() == info["payloads"]["S_T1_R1.fastq.gz"]
 
 
 # --------------------------------------------------------------------------- #

@@ -468,7 +468,8 @@ def files_for_project(
     cur.execute(
         "SELECT f.file_id, f.sample_id, sm.sample_name, "
         "s.subject_code, v.timepoint, "
-        "f.file_type, f.file_path, f.file_size_bytes, f.checksum_md5, "
+        "f.file_type, f.file_path, f.archive_member, f.archive_offset, "
+        "f.file_size_bytes, f.checksum_md5, "
         "f.storage_tier, f.created_at "
         "FROM project_samples ps "
         "JOIN sample_files f ON f.sample_id = ps.sample_id "
@@ -585,7 +586,8 @@ def find_db_files_missing_on_disk(
     cols = (
         "SELECT f.file_id, f.sample_id, sm.sample_name, "
         "s.subject_code, v.timepoint, "
-        "f.file_type, f.file_path, f.file_size_bytes, f.checksum_md5, "
+        "f.file_type, f.file_path, f.archive_member, f.archive_offset, "
+        "f.file_size_bytes, f.checksum_md5, "
         "f.storage_tier, f.created_at "
     )
     if project_id is not None:

@@ -16,6 +16,10 @@ Layout produced by :func:`export_project`:
         # or
         └── <file_type>/<sample_name>.<ext>     # layout='by_type'
 
+A file registered as a member of a tar (``archive_member`` set) is
+extracted on its own: read at ``archive_offset`` when known, otherwise
+looked up by name in the tar, and checked against ``checksum_md5``.
+
 All functions take an *optional* cursor and open their own
 :func:`noxdb.transaction` block when one isn't provided, so they
 work as one-shot calls from a notebook or composed inside a larger
@@ -24,8 +28,10 @@ read transaction.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
+import tarfile
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
@@ -42,6 +48,8 @@ from noxdb.connection import (
 # --------------------------------------------------------------------------- #
 # Internal helpers
 # --------------------------------------------------------------------------- #
+
+_COPY_CHUNK = 8 * 1024 * 1024  # 8 MiB
 
 def _cur_ctx(cur):
     """Return a context manager yielding a usable cursor."""
@@ -73,21 +81,35 @@ def _file_extension(path: str) -> str:
     return os.path.splitext(path)[1]
 
 
+def _opt_int(value: Any) -> int | None:
+    """Return *value* as int, or None for SQL NULL (None or pandas NaN)."""
+    if value is None or value != value:
+        return None
+    return int(value)
+
+
 def _layout_target(
     layout: str,
     base: Path,
     sample_name: str,
     file_type: str,
     src_path: str,
+    archive_member: str = "",
 ) -> Path:
-    """Compute the local destination path for *src_path* under *base*."""
+    """Compute the local destination path for *src_path* under *base*.
+
+    A tar member keeps its own file name in every layout: a resequenced
+    sample has one member per run for the same file type, and
+    ``<file_type>.<ext>`` would give them all the same destination.
+    """
     ext = _file_extension(src_path)
+    member_name = os.path.basename(archive_member)
     if layout == "by_sample":
-        return base / sample_name / f"{file_type}{ext}"
+        return base / sample_name / (member_name or f"{file_type}{ext}")
     if layout == "by_type":
-        return base / file_type / f"{sample_name}{ext}"
+        return base / file_type / (member_name or f"{sample_name}{ext}")
     if layout == "flat":
-        return base / os.path.basename(src_path)
+        return base / (member_name or os.path.basename(src_path))
     raise ValueError(
         f"layout must be one of 'by_sample', 'by_type', 'flat'; got {layout!r}"
     )
@@ -154,6 +176,51 @@ class _Transport:
             self._sftp.get(src, str(dst))
         else:
             shutil.copyfile(src, dst)
+        return dst.stat().st_size
+
+    def fetch_member(
+        self,
+        tar_path: str,
+        member: str,
+        dst: Path,
+        *,
+        offset: int | None,
+        size: int | None,
+        md5: str | None,
+    ) -> int:
+        """Extract one *member* of the tar at *tar_path* to *dst*. Returns size.
+
+        With *offset* and *size* the member's bytes are read directly;
+        otherwise the tar is scanned for *member*. When *md5* is given the
+        copy is checked against it and removed on a mismatch.
+        """
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        opener = self._sftp.open if self._sftp is not None else open
+        h = hashlib.md5()
+        try:
+            with opener(tar_path, "rb") as f, open(dst, "wb") as out:
+                if offset is not None and size is not None:
+                    f.seek(offset)
+                    src, remaining = f, size
+                else:
+                    tf = tarfile.open(fileobj=f, mode="r:")
+                    info = tf.getmember(member)
+                    src, remaining = tf.extractfile(info), info.size
+                while remaining > 0:
+                    chunk = src.read(min(_COPY_CHUNK, remaining))
+                    if not chunk:
+                        raise OSError(f"{tar_path}: unexpected end of data in {member!r}")
+                    h.update(chunk)
+                    out.write(chunk)
+                    remaining -= len(chunk)
+            if md5 is not None and h.hexdigest() != md5:
+                raise OSError(
+                    f"md5 mismatch for {member!r} in {tar_path}: "
+                    f"expected {md5}, got {h.hexdigest()}"
+                )
+        except BaseException:
+            dst.unlink(missing_ok=True)
+            raise
         return dst.stat().st_size
 
     def close(self) -> None:
@@ -248,9 +315,12 @@ def download_files_for_project(
         file_types: Only download files whose ``file_type`` is in the
             list. ``None`` means every type.
         layout: ``'by_sample'`` groups files under per-sample
-            subdirectories; ``'by_type'`` groups by file_type;
+            subdirectories (``<sample>/<file_type>.<ext>``); ``'by_type'``
+            groups by file_type (``<file_type>/<sample>.<ext>``);
             ``'flat'`` writes every file at the top level (note:
-            ``file_path`` is globally UNIQUE but basenames are not).
+            ``file_path`` is globally UNIQUE but basenames are not). A tar
+            member is always saved under its own name inside the tar, so
+            the runs of a resequenced sample don't overwrite each other.
         config_path: Path to the MariaDB-style config file. ``None``
             disables config-file lookup.
         ssh_section: Section name within ``config_path`` to read SSH
@@ -260,8 +330,9 @@ def download_files_for_project(
 
     Returns:
         ``{"downloaded": [...], "skipped": [...], "failed": [...],
-        "output_dir": str}``. ``downloaded`` entries include ``size``;
-        ``failed`` entries include ``error``.
+        "output_dir": str}``. Every entry has ``file_path``,
+        ``archive_member`` and ``dst``; ``downloaded`` entries include
+        ``size``, ``failed`` entries include ``error``.
 
     Raises:
         ValueError: Unknown ``layout``.
@@ -292,22 +363,28 @@ def download_files_for_project(
 
     with _Transport(creds) as transport:
         for row in df.to_dict("records"):
+            member = row["archive_member"]
             dst = _layout_target(
-                layout, out, row["sample_name"], row["file_type"], row["file_path"]
+                layout, out, row["sample_name"], row["file_type"], row["file_path"], member,
             )
+            entry = {"file_path": row["file_path"], "archive_member": member, "dst": str(dst)}
             if dst.exists():
-                skipped.append({"file_path": row["file_path"], "dst": str(dst)})
+                skipped.append(entry)
                 continue
             try:
-                size = transport.fetch(row["file_path"], dst)
+                if member:
+                    size = transport.fetch_member(
+                        row["file_path"], member, dst,
+                        offset=_opt_int(row["archive_offset"]),
+                        size=_opt_int(row["file_size_bytes"]),
+                        md5=row["checksum_md5"] if isinstance(row["checksum_md5"], str) else None,
+                    )
+                else:
+                    size = transport.fetch(row["file_path"], dst)
             except Exception as exc:
-                failed.append(
-                    {"file_path": row["file_path"], "dst": str(dst), "error": str(exc)}
-                )
+                failed.append({**entry, "error": str(exc)})
                 continue
-            downloaded.append(
-                {"file_path": row["file_path"], "dst": str(dst), "size": size}
-            )
+            downloaded.append({**entry, "size": size})
 
     return {
         "downloaded": downloaded,

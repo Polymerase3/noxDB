@@ -623,3 +623,161 @@ def test_exists_requires_exactly_one_arg(parent_ids):
             files.exists(cur)
         with pytest.raises(ValueError):
             files.exists(cur, 1, path="/x")
+
+
+# --------------------------------------------------------------------------- #
+# Tar members (schema 006)
+# --------------------------------------------------------------------------- #
+
+MD5_A = "a" * 32
+
+
+def _register_member(cur, sample_id, tar, member, **kw):
+    kw.setdefault("file_size_bytes", 123)
+    kw.setdefault("archive_offset", 512)
+    kw.setdefault("checksum_md5", MD5_A)
+    return files.register(cur, sample_id, tar, "fastq_r1", archive_member=member, **kw)
+
+
+def test_register_tar_member(parent_ids, roots):
+    arc, _ = roots
+    tar = _make_file(arc / "run.tar", b"x" * 4096)
+    with transaction() as cur:
+        fid = _register_member(cur, parent_ids, tar, "S1_R1.fastq.gz")
+    with transaction() as cur:
+        row = files.get(cur, fid)
+    assert row["file_path"] == tar
+    assert row["archive_member"] == "S1_R1.fastq.gz"
+    assert row["archive_offset"] == 512
+    assert row["file_size_bytes"] == 123  # the member's size, not the tar's
+    assert row["checksum_md5"] == MD5_A
+    assert row["storage_tier"] == "archive"
+
+
+def test_register_plain_file_has_empty_member(parent_ids, roots):
+    arc, _ = roots
+    path = _make_file(arc / "plain.bam")
+    with transaction() as cur:
+        fid = files.register(cur, parent_ids, path, "bam")
+    with transaction() as cur:
+        row = files.get(cur, fid)
+    assert row["archive_member"] == ""
+    assert row["archive_offset"] is None
+
+
+def test_register_two_members_of_one_tar(parent_ids, roots):
+    arc, _ = roots
+    tar = _make_file(arc / "run.tar")
+    with transaction() as cur:
+        _register_member(cur, parent_ids, tar, "S1_R1.fastq.gz")
+        files.register(cur, parent_ids, tar, "fastq_r2", archive_member="S1_R2.fastq.gz",
+                       file_size_bytes=1, archive_offset=2048)
+    with transaction() as cur:
+        assert files.count_for_sample(cur, parent_ids) == 2
+
+
+def test_register_duplicate_member_raises(parent_ids, roots):
+    arc, _ = roots
+    tar = _make_file(arc / "run.tar")
+    with transaction() as cur:
+        _register_member(cur, parent_ids, tar, "S1_R1.fastq.gz")
+    with pytest.raises(mariadb.IntegrityError):
+        with transaction() as cur:
+            _register_member(cur, parent_ids, tar, "S1_R1.fastq.gz")
+
+
+def test_register_member_extension_checked_on_member(parent_ids, roots):
+    arc, _ = roots
+    tar = _make_file(arc / "run.tar")
+    with pytest.raises(ValueError, match="requires extension"):
+        with transaction() as cur:
+            _register_member(cur, parent_ids, tar, "S1_R1.bam")
+
+
+def test_register_member_requires_tar(parent_ids, roots):
+    arc, _ = roots
+    path = _make_file(arc / "run.zip")
+    with pytest.raises(ValueError, match=r"\.tar"):
+        with transaction() as cur:
+            _register_member(cur, parent_ids, path, "S1_R1.fastq.gz")
+
+
+def test_register_member_missing_tar_raises(parent_ids, roots):
+    arc, _ = roots
+    with pytest.raises(FileNotFoundError):
+        with transaction() as cur:
+            _register_member(cur, parent_ids, str(arc / "gone.tar"), "S1_R1.fastq.gz")
+
+
+def test_register_member_rejects_compute_md5(parent_ids, roots):
+    arc, _ = roots
+    tar = _make_file(arc / "run.tar")
+    with pytest.raises(ValueError, match="compute_md5"):
+        with transaction() as cur:
+            _register_member(cur, parent_ids, tar, "S1_R1.fastq.gz",
+                             checksum_md5=None, compute_md5=True)
+
+
+def test_register_offset_or_size_without_member_rejected(parent_ids, roots):
+    arc, _ = roots
+    path = _make_file(arc / "plain.bam")
+    with transaction() as cur:
+        with pytest.raises(ValueError, match="only accepted with archive_member"):
+            files.register(cur, parent_ids, path, "bam", archive_offset=0)
+        with pytest.raises(ValueError, match="only accepted with archive_member"):
+            files.register(cur, parent_ids, path, "bam", file_size_bytes=5)
+
+
+def test_register_member_skip_disk_check_keeps_size(parent_ids, roots):
+    arc, _ = roots
+    with transaction() as cur:
+        fid = _register_member(cur, parent_ids, str(arc / "not_here.tar"),
+                               "S1_R1.fastq.gz", skip_disk_check=True)
+    with transaction() as cur:
+        assert files.get(cur, fid)["file_size_bytes"] == 123
+
+
+def test_get_by_path_and_exists_match_member(parent_ids, roots):
+    arc, _ = roots
+    tar = _make_file(arc / "run.tar")
+    with transaction() as cur:
+        fid = _register_member(cur, parent_ids, tar, "S1_R1.fastq.gz")
+    with transaction() as cur:
+        assert files.get_by_path(cur, tar, "S1_R1.fastq.gz")["file_id"] == fid
+        assert files.get_by_path(cur, tar) is None
+        assert files.exists(cur, path=tar, archive_member="S1_R1.fastq.gz") is True
+        assert files.exists(cur, path=tar) is False
+
+
+def test_get_or_register_member_is_idempotent(parent_ids, roots):
+    arc, _ = roots
+    tar = _make_file(arc / "run.tar")
+    kw = dict(archive_member="S1_R1.fastq.gz", archive_offset=512,
+              file_size_bytes=123, checksum_md5=MD5_A)
+    with transaction() as cur:
+        fid1, new1 = files.get_or_register(cur, parent_ids, tar, "fastq_r1", **kw)
+    with transaction() as cur:
+        fid2, new2 = files.get_or_register(cur, parent_ids, tar, "fastq_r1", **kw)
+    assert (new1, new2) == (True, False)
+    assert fid1 == fid2
+
+
+def test_restat_rejects_member(parent_ids, roots):
+    arc, _ = roots
+    tar = _make_file(arc / "run.tar")
+    with transaction() as cur:
+        fid = _register_member(cur, parent_ids, tar, "S1_R1.fastq.gz")
+    with pytest.raises(ValueError, match="tar member"):
+        with transaction() as cur:
+            files.restat(cur, fid)
+
+
+def test_offset_without_member_rejected_by_schema(parent_ids, roots):
+    arc, _ = roots
+    with pytest.raises(mariadb.Error):
+        with transaction() as cur:
+            cur.execute(
+                "INSERT INTO sample_files (sample_id, file_type, file_path, archive_offset, "
+                "storage_tier) VALUES (?, 'bam', ?, 0, 'archive')",
+                (parent_ids, str(arc / "x.bam")),
+            )
