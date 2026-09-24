@@ -271,9 +271,41 @@ def test_download_tar_members_by_offset(project_with_tar_members, tmp_path):
         project_id=info["project_id"], output_dir=out, config_path=None, ssh_host="",
     )
     assert report["failed"] == []
-    assert (out / "S_T1" / "fastq_r1.fastq.gz").read_bytes() == info["payloads"]["S_T1_R1.fastq.gz"]
-    assert (out / "S_T1" / "fastq_r2.fastq.gz").read_bytes() == info["payloads"]["S_T1_R2.fastq.gz"]
+    for name, data in info["payloads"].items():
+        assert (out / "S_T1" / name).read_bytes() == data
     assert {d["archive_member"] for d in report["downloaded"]} == set(info["payloads"])
+
+
+def test_download_resequenced_sample_keeps_both_runs(project_with_tar_members, tmp_path):
+    """Two fastq_r1 rows for one sample (a second run's tar) must both arrive."""
+    import hashlib
+    import tarfile
+
+    info = project_with_tar_members
+    second = tmp_path / "reseq_R1.fastq.gz"
+    second.write_bytes(b"second-run" * 100)
+    tar2 = tmp_path / "reseq.tar"
+    with tarfile.open(tar2, "w") as tf:
+        tf.add(second, arcname="BSF_1_FC_1#S_T1_S99_R1.fastq.gz")
+    with tarfile.open(tar2) as tf:
+        offset = tf.getmember("BSF_1_FC_1#S_T1_S99_R1.fastq.gz").offset_data
+    with transaction() as cur:
+        cur.execute(
+            "INSERT INTO sample_files (sample_id, file_type, file_path, archive_member, "
+            "archive_offset, file_size_bytes, checksum_md5, storage_tier) "
+            "SELECT sample_id, 'fastq_r1', ?, ?, ?, ?, ?, 'archive' FROM samples WHERE sample_name = 'S_T1'",
+            (str(tar2), "BSF_1_FC_1#S_T1_S99_R1.fastq.gz", offset, second.stat().st_size,
+             hashlib.md5(second.read_bytes()).hexdigest()),
+        )
+    for layout, sub in (("by_sample", "S_T1"), ("by_type", "fastq_r1")):
+        out = tmp_path / f"dl_{layout}"
+        report = fetch.download_files_for_project(
+            project_id=info["project_id"], output_dir=out, layout=layout,
+            config_path=None, ssh_host="",
+        )
+        assert report["failed"] == [] and report["skipped"] == []
+        assert (out / sub / "S_T1_R1.fastq.gz").read_bytes() == info["payloads"]["S_T1_R1.fastq.gz"]
+        assert (out / sub / "BSF_1_FC_1#S_T1_S99_R1.fastq.gz").read_bytes() == second.read_bytes()
 
 
 def test_download_tar_member_without_offset_scans_tar(project_with_tar_members, tmp_path):
@@ -302,7 +334,7 @@ def test_download_tar_member_md5_mismatch_fails_and_cleans_up(project_with_tar_m
     )
     assert len(report["failed"]) == 1
     assert "md5 mismatch" in report["failed"][0]["error"]
-    assert not (out / "S_T1" / "fastq_r1.fastq.gz").exists()
+    assert not (out / "S_T1" / "S_T1_R1.fastq.gz").exists()
     assert len(report["downloaded"]) == 1
 
 
@@ -400,7 +432,7 @@ def test_download_tar_members_over_sftp(project_with_tar_members, tmp_path, monk
     )
     assert report["failed"] == []
     assert len(opened) == 2
-    assert (out / "S_T1" / "fastq_r1.fastq.gz").read_bytes() == info["payloads"]["S_T1_R1.fastq.gz"]
+    assert (out / "S_T1" / "S_T1_R1.fastq.gz").read_bytes() == info["payloads"]["S_T1_R1.fastq.gz"]
 
 
 # --------------------------------------------------------------------------- #

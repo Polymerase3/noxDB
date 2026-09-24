@@ -94,15 +94,22 @@ def _layout_target(
     sample_name: str,
     file_type: str,
     src_path: str,
+    archive_member: str = "",
 ) -> Path:
-    """Compute the local destination path for *src_path* under *base*."""
+    """Compute the local destination path for *src_path* under *base*.
+
+    A tar member keeps its own file name in every layout: a resequenced
+    sample has one member per run for the same file type, and
+    ``<file_type>.<ext>`` would give them all the same destination.
+    """
     ext = _file_extension(src_path)
+    member_name = os.path.basename(archive_member)
     if layout == "by_sample":
-        return base / sample_name / f"{file_type}{ext}"
+        return base / sample_name / (member_name or f"{file_type}{ext}")
     if layout == "by_type":
-        return base / file_type / f"{sample_name}{ext}"
+        return base / file_type / (member_name or f"{sample_name}{ext}")
     if layout == "flat":
-        return base / os.path.basename(src_path)
+        return base / (member_name or os.path.basename(src_path))
     raise ValueError(
         f"layout must be one of 'by_sample', 'by_type', 'flat'; got {layout!r}"
     )
@@ -308,10 +315,12 @@ def download_files_for_project(
         file_types: Only download files whose ``file_type`` is in the
             list. ``None`` means every type.
         layout: ``'by_sample'`` groups files under per-sample
-            subdirectories; ``'by_type'`` groups by file_type;
+            subdirectories (``<sample>/<file_type>.<ext>``); ``'by_type'``
+            groups by file_type (``<file_type>/<sample>.<ext>``);
             ``'flat'`` writes every file at the top level (note:
-            ``file_path`` is globally UNIQUE but basenames are not). For a
-            tar member the member's name stands in for the path.
+            ``file_path`` is globally UNIQUE but basenames are not). A tar
+            member is always saved under its own name inside the tar, so
+            the runs of a resequenced sample don't overwrite each other.
         config_path: Path to the MariaDB-style config file. ``None``
             disables config-file lookup.
         ssh_section: Section name within ``config_path`` to read SSH
@@ -356,8 +365,7 @@ def download_files_for_project(
         for row in df.to_dict("records"):
             member = row["archive_member"]
             dst = _layout_target(
-                layout, out, row["sample_name"], row["file_type"],
-                member or row["file_path"],
+                layout, out, row["sample_name"], row["file_type"], row["file_path"], member,
             )
             entry = {"file_path": row["file_path"], "archive_member": member, "dst": str(dst)}
             if dst.exists():

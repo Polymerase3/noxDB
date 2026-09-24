@@ -28,6 +28,10 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
   at `archive_offset`, or found by name when the offset is unknown), locally
   or over SFTP, and checks it against `checksum_md5`; a mismatch is reported
   as failed and the partial copy removed.
+- In every download layout a tar member is saved under its own name inside
+  the tar (e.g. `<sample>/<name>_R1.fastq.gz` for `by_sample`), so the runs
+  of a resequenced sample no longer collide on `<sample>/fastq_r1.fastq.gz`.
+  Plain files keep the existing naming.
 - `queries.files_for_project` and `find_db_files_missing_on_disk` return
   `archive_member` and `archive_offset`.
 
