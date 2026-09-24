@@ -52,10 +52,10 @@ S_B,baseline,tx,45,28.0,true
 """
 
 SAMPLES_CSV = """\
-sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library,antibody_class,meta_well,meta_passed_qc
-{prefix}_SA1,S_A,baseline,sample,Q1,Q1,libA,IgG,A01,true
-{prefix}_SA2,S_A,m3,sample,Q2,Q2,libA,IgG,A02,true
-{prefix}_SB1,S_B,baseline,input,Q1,Q1,libA,,B01,false
+sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library,antibody_class,meta_well,meta_passed_qc
+{prefix}_SA1,S_A,baseline,sample,01,01,Q1,Q1,libA,IgG,A01,true
+{prefix}_SA2,S_A,m3,sample,01,01,Q2,Q2,libA,IgG,A02,true
+{prefix}_SB1,S_B,baseline,input,01,,Q1,Q1,libA,,B01,false
 """
 
 MANIFEST_CSV = """\
@@ -230,9 +230,9 @@ def test_missing_subject_referenced_by_visit(tmp_path, clean_db, fake_tier_roots
 def test_duplicate_sample_name_within_csv(tmp_path, clean_db, fake_tier_roots):
     proj = _build_project(tmp_path, name="IMP_DUP", prefix="DUP")
     (proj / "samples.csv").write_text(
-        "sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library\n"
-        "DUP_X,S_A,baseline,sample,Q,Q,libA\n"
-        "DUP_X,S_A,m3,sample,Q,Q,libA\n"
+        "sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library\n"
+        "DUP_X,S_A,baseline,sample,01,01,Q,Q,libA\n"
+        "DUP_X,S_A,m3,sample,01,01,Q,Q,libA\n"
     )
     with pytest.raises(ProjectImportError) as exc:
         import_project_from_dir(proj, log_dir=tmp_path / "logs")
@@ -289,9 +289,9 @@ def test_sample_name_shared_across_projects_is_linked(
         "subject_code,timepoint,group_test,age\nS_X,t0,ctrl,20\n"
     )
     (proj_b / "samples.csv").write_text(
-        "sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library\n"
+        "sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library\n"
         # CA_SA1 already lives in project COLL_A — sharing is allowed now.
-        "CA_SA1,S_X,t0,sample,Q,Q,libA\n"
+        "CA_SA1,S_X,t0,sample,01,01,Q,Q,libA\n"
     )
     (proj_b / "files").mkdir()
     # Re-list CA_SA1's EXISTING file (same sample_name + same path). This
@@ -343,8 +343,8 @@ def test_file_path_bound_to_different_sample_errors(
     )
     # NEW sample name, but it claims CA_SA1's existing file path.
     (proj_b / "samples.csv").write_text(
-        "sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library\n"
-        "CB_OTHER,S_Y,t0,sample,Q,Q,libA\n"
+        "sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library\n"
+        "CB_OTHER,S_Y,t0,sample,01,01,Q,Q,libA\n"
     )
     stolen = tmp_path / "archive" / "CA_SA1_R1.fastq.gz"
     (proj_b / "files").mkdir()
@@ -384,7 +384,9 @@ def test_control_autolink_follows_the_ip_plate(tmp_path, clean_db, fake_tier_roo
     sequenced in different runs (08 vs 09). Before 0.8.0 the auto-link
     keyed on SQR/SQRP and would have missed this pair; keying on
     IPR/IPRP finds it, which is the physical relationship — the control
-    is well 81 of the very plate the study sample is on.
+    is well 81 of the very plate the study sample is on. The study
+    sample's name carries a different RxxPxx, so a link read from the
+    name would miss it too.
     """
     # The control lands first, under its own project.
     ctrl_dir = tmp_path / "ctrlproj"
@@ -395,8 +397,8 @@ def test_control_autolink_follows_the_ip_plate(tmp_path, clean_db, fake_tier_roo
         "subject_code,timepoint,group_test,age\nC_1,baseline,ctrl,\n"
     )
     (ctrl_dir / "samples.csv").write_text(
-        "sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library\n"
-        "R21P03_81_Mock_1_A_T_C2,C_1,baseline,mockIP,08,01,libA\n"
+        "sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library\n"
+        "R21P03_81_Mock_1_A_T_C2,C_1,baseline,mockIP,21,03,08,01,libA\n"
     )
     (ctrl_dir / "files").mkdir()
     (ctrl_dir / "files" / "manifest.csv").write_text(
@@ -413,8 +415,9 @@ def test_control_autolink_follows_the_ip_plate(tmp_path, clean_db, fake_tier_roo
         "subject_code,timepoint,group_test,age\nS_1,baseline,tx,40\n"
     )
     (study_dir / "samples.csv").write_text(
-        "sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library\n"
-        "R21P03_07_SUBJ_A_T_C2,S_1,baseline,sample,09,05,libA\n"
+        "sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library\n"
+        # Labelled R08P01 on its files, but the sheet puts it on R21P03.
+        "R08P01_07_SUBJ_A_T_C2,S_1,baseline,sample,21,03,09,05,libA\n"
     )
     (study_dir / "files").mkdir()
     (study_dir / "files" / "manifest.csv").write_text(

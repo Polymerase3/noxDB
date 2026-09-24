@@ -201,6 +201,7 @@ def test_register_sample_with_files_happy_path(project, fake_tier_roots):
             {"file_path": str(fq), "file_type": "fastq_r1"},
             {"file_path": str(norm), "file_type": "beer_norm"},
         ],
+        ipr="01", iprp="01",
     )
     assert len(file_ids) == 2
     with transaction() as cur:
@@ -231,6 +232,7 @@ def test_register_sample_with_files_atomic_on_bad_file(project, fake_tier_roots)
                 {"file_path": str(archive / "missing.fastq.gz"),
                  "file_type": "fastq_r2"},
             ],
+            ipr="01", iprp="01",
         )
     with transaction() as cur:
         assert samples.get_by_name(cur, "ROLLBACK_SAMP") is None
@@ -251,12 +253,14 @@ def test_register_sample_with_files_idempotent(project, fake_tier_roots):
         sample_name="IDEMP_SAMP",
         sample_type="sample", sqr="Q1", sqrp="Q1", library="libA",
         files_spec=[{"file_path": str(fq), "file_type": "fastq_r1"}],
+        ipr="01", iprp="01",
     )
     sid2, fids2 = workflows.register_sample_with_files(
         visit_id=vid,
         sample_name="IDEMP_SAMP",
         sample_type="sample", sqr="Q1", sqrp="Q1", library="libA",
         files_spec=[{"file_path": str(fq), "file_type": "fastq_r1"}],
+        ipr="01", iprp="01",
     )
     assert sid1 == sid2
     assert fids1 == fids2
@@ -269,6 +273,7 @@ def test_register_sample_with_files_unknown_visit_raises(project, fake_tier_root
             visit_id=9_999_999,
             sample_name="NO_VISIT",
             sample_type="sample", sqr="Q1", sqrp="Q1", library="libA",
+            ipr="01", iprp="01",
         )
     with transaction() as cur:
         assert samples.get_by_name(cur, "NO_VISIT") is None
@@ -293,6 +298,7 @@ def test_register_sample_with_files_composes_in_outer_transaction(
             sample_name="COMPOSE_SAMP",
             sample_type="sample", sqr="Q1", sqrp="Q1", library="libA",
             files_spec=[{"file_path": str(fq), "file_type": "fastq_r1"}],
+            ipr="01", iprp="01",
         )
     with transaction() as cur:
         assert samples.get(cur, sample_id)["sample_name"] == "COMPOSE_SAMP"

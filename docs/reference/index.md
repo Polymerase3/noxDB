@@ -12,6 +12,7 @@ Every page below is auto-generated from the docstrings in
 | [`subjects`](subjects.md)                    | CRUD for `subjects` (keyed on globally-unique `subject_code`)           |
 | [`visits`](visits.md)                        | CRUD for `visits` (keyed on `(subject_id, timepoint)`)                  |
 | [`samples`](samples.md)                      | CRUD for `samples` (`sample_name` globally UNIQUE)                      |
+| [`ip_runs`](ip_runs.md)                      | IP run/plate coordinates from the "Overview of IP runs" sheet           |
 | [`metadata`](metadata.md)                    | EAV wrapper for `visit_metadata` and `sample_metadata`                  |
 | [`files`](files.md)                          | Filesystem-validating registration for `sample_files`                   |
 | [`queries`](queries.md)                      | Read-only joins, tidy tables, integrity checks                          |

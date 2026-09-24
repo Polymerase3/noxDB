@@ -48,7 +48,6 @@ from pathlib import Path
 from typing import Any
 
 from noxdb import close_pool, init_pool, projects, queries, transaction
-from noxdb.samples import ip_coords_from_name
 
 # sqr_coverage lives next to this script; the tests load this file by path,
 # so its directory is not on sys.path by default.
@@ -571,20 +570,20 @@ def check_orphans(cur) -> dict[str, Any]:
     }
 
 
-def _sample_identity(sample_name: str) -> tuple | None:
+def _sample_identity(sample_name: str, ipr: str, iprp: str) -> tuple | None:
     """Identity of a sample ignoring how its numbers happen to be padded.
 
     ``R05P01_01_0474408_KielP01_A_T_C2`` and
     ``R05P01_1_0474408_KielP01_A_T_C2`` are one specimen registered
-    twice. Only the IP coordinates and the well number are
-    re-normalized; everything after them is compared verbatim, because
-    a leading zero inside a subject id is significant.
+    twice. The plate is the stored ``IPR``/``IPRP``, not the name's
+    prefix; the well number is re-normalized; everything after it is
+    compared verbatim, because a leading zero inside a subject id is
+    significant.
     """
-    coords = ip_coords_from_name(sample_name)
     parts = (sample_name or "").split("_")
-    if coords is None or len(parts) < 3 or not parts[1].isdigit():
+    if not ipr or len(parts) < 3 or not parts[1].isdigit():
         return None
-    return (coords, int(parts[1]), tuple(p.lower() for p in parts[2:]))
+    return ((ipr, iprp), int(parts[1]), tuple(p.lower() for p in parts[2:]))
 
 
 def check_duplicates(cur) -> dict[str, Any]:
@@ -614,10 +613,10 @@ def check_duplicates(cur) -> dict[str, Any]:
         if n:
             exact[table] = n
 
-    cur.execute("SELECT sample_id, sample_name FROM samples")
+    cur.execute("SELECT sample_id, sample_name, IPR, IPRP FROM samples")
     by_identity: dict[tuple, list] = {}
-    for sample_id, name in cur.fetchall():
-        identity = _sample_identity(name)
+    for sample_id, name, ipr, iprp in cur.fetchall():
+        identity = _sample_identity(name, ipr, iprp)
         if identity is not None:
             by_identity.setdefault(identity, []).append((sample_id, name))
     near = [

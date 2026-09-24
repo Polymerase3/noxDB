@@ -107,8 +107,8 @@ One row per physical sample / library / Ig-class measurement. `sample_name` is g
 | `visit_id`       | `BIGINT UNSIGNED` FK                                         | NO       | → `visits.visit_id` CASCADE                    |
 | `sample_name`    | `VARCHAR(100)`                                               | NO       | UNIQUE globally                                |
 | `sample_type`    | `ENUM('sample','mockIP','input','anchor','NC')`              | NO       | See [Controls](#controls)                      |
-| `IPR`            | `VARCHAR(10)`                                                | NO       | IP run — derived from `sample_name`, zero-padded |
-| `IPRP`           | `VARCHAR(10)`                                                | NO       | IP plate within that run — derived from `sample_name`, zero-padded |
+| `IPR`            | `VARCHAR(10)`                                                | NO       | IP run — from the IP runs sheet, zero-padded |
+| `IPRP`           | `VARCHAR(10)`                                                | NO       | IP plate within that run — from the IP runs sheet, zero-padded |
 | `SQR`            | `VARCHAR(10)`                                                | NO       | Sequencing run — from the run sheet, zero-padded |
 | `SQRP`           | `VARCHAR(10)`                                                | NO       | Sequencing plate within that run — from the run sheet, zero-padded |
 | `library`        | `VARCHAR(50)`                                                | NO       |                                                |
@@ -125,14 +125,15 @@ fix. Both are matched by exact string equality, so both are zero-padded
 to a canonical form on every write
 ([`samples.canonical_plate_id`][noxdb.samples.canonical_plate_id]).
 
-`IPR` / `IPRP` — **immunoprecipitation** run and plate. This is the
-`RxxPxx` in `sample_name`, and the grain of the files on disk: a plate
-is 96 wells, wells 81-96 being its controls. Derived from the name by
-[`samples.ip_coords_from_name`][noxdb.samples.ip_coords_from_name] on
-insert and never supplied by a caller, so a stored pair cannot
-contradict the name it came from. `R42P02_09_..` is IP run `42`, plate
-`02`; a run-only name such as `R31_input1_01_..` is run `31` with an
-empty plate.
+`IPR` / `IPRP` — **immunoprecipitation** run and plate: a plate is 96
+wells, wells 81-96 being its controls. They come from columns N
+(`IP run #`) and O (`Plate #`) of the lab's "Overview of IP runs"
+sheet, read by [`noxdb.ip_runs`][noxdb.ip_runs], and every caller of
+[`samples.create`][noxdb.samples.create] passes them explicitly. The
+`RxxPxx` at the start of `sample_name` is **not** a source: some
+plates' files were labelled with the wrong one, so for CORSA
+`R02P01_01_..` is stored as IP run `04`, plate `03`. Inputs carry a
+run and an empty plate.
 
 `SQR` / `SQRP` — **sequencing** run and the plate within it. These come
 from the run sheet and from nowhere else; nothing in the sample name

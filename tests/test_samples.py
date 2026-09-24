@@ -34,6 +34,7 @@ def test_create_returns_new_id_and_persists(two_visits):
         sid = samples.create(
             cur, v1, "SAMP_A", "sample", "SQR1", "SQRP1", "libA",
             antibody_class="IgG",
+            ipr="01", iprp="01",
         )
         assert isinstance(sid, int) and sid > 0
         row = samples.get(cur, sid)
@@ -46,56 +47,60 @@ def test_create_returns_new_id_and_persists(two_visits):
     assert row["antibody_class"] == "IgG"
 
 
-def test_create_derives_ip_coords_from_the_name(two_visits):
-    """IPR/IPRP come from the name, never from the caller.
+def test_create_stores_the_ip_coords_it_is_given(two_visits):
+    """IPR/IPRP come from the caller, never from the name.
 
-    The sequencing coordinates passed in are deliberately different, so
-    a test that confused the two pairs would fail here.
+    The name carries a different RxxPxx and the sequencing coordinates
+    differ again, so a test that read either would fail here.
     """
     v1, _ = two_visits
     with transaction() as cur:
         sid = samples.create(
-            cur, v1, "R14P02_77_FAU0001_ADMCI_NED_A_T_C2", "sample",
-            "07", "02", "libA",
+            cur, v1, "R02P01_01_CORSAp1_6308_A_T_C2", "sample",
+            "07", "02", "libA", ipr="04", iprp="03",
         )
         row = samples.get(cur, sid)
-    assert (row["IPR"], row["IPRP"]) == ("14", "02")
+    assert (row["IPR"], row["IPRP"]) == ("04", "03")
     assert (row["SQR"], row["SQRP"]) == ("07", "02")
 
 
-def test_create_derives_ip_coords_canonically(two_visits):
-    """An unpadded name stores the padded form, so IPR+IPRP matching
+def test_create_canonicalizes_ip_coords(two_visits):
+    """Unpadded input stores the padded form, so IPR+IPRP matching
     compares byte-for-byte against a padded row."""
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "R5P1_7_x_A_T_C2", "sample", "11", "03", "libA")
+        sid = samples.create(
+            cur, v1, "CANON_IP", "sample", "11", "03", "libA", ipr=" 5", iprp="1",
+        )
         row = samples.get(cur, sid)
     assert (row["IPR"], row["IPRP"]) == ("05", "01")
 
 
-def test_create_ip_coords_empty_for_a_run_only_name(two_visits):
+def test_create_ip_plate_empty_for_a_run_only_sample(two_visits):
     """An input carries a run and no plate, matching how SQRP models
     'no plate' as '' rather than NULL."""
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "R02_input_01_A_T_C2", "input", "02", "", "libA")
+        sid = samples.create(
+            cur, v1, "R02_input_01_A_T_C2", "input", "02", "", "libA",
+            ipr="02", iprp="NA",
+        )
         row = samples.get(cur, sid)
     assert (row["IPR"], row["IPRP"]) == ("02", "")
 
 
-def test_create_ip_coords_empty_when_the_name_has_none(two_visits):
+def test_create_requires_ip_coords(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "no_coordinates_here", "sample", "07", "02", "libA")
-        row = samples.get(cur, sid)
-    assert (row["IPR"], row["IPRP"]) == ("", "")
+        with pytest.raises(TypeError, match="ipr"):
+            samples.create(cur, v1, "R05P01_1_x", "sample", "07", "02", "libA")
 
 
 def test_update_can_correct_ip_coords(two_visits):
-    """create() derives them, but a stored row must still be fixable."""
+    """A stored row must be fixable when the sheet is corrected."""
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "R05P01_1_x_A_T_C2", "sample", "07", "02", "libA")
+        sid = samples.create(cur, v1, "R05P01_1_x_A_T_C2", "sample", "07", "02", "libA", ipr="01", iprp="01")
         samples.update(cur, sid, ipr=" 9 ", iprp="N/A")
         row = samples.get(cur, sid)
     assert (row["IPR"], row["IPRP"]) == ("09", "")
@@ -104,7 +109,7 @@ def test_update_can_correct_ip_coords(two_visits):
 def test_update_leaves_ip_coords_alone_when_not_given(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "R42P02_09_x_A_T_C2", "sample", "07", "02", "libA")
+        sid = samples.create(cur, v1, "R42P02_09_x_A_T_C2", "sample", "07", "02", "libA", ipr="42", iprp="02")
         samples.update(cur, sid, sqr="12", sqrp="04")
         row = samples.get(cur, sid)
     assert (row["IPR"], row["IPRP"]) == ("42", "02")
@@ -118,6 +123,7 @@ def test_create_canonicalizes_sqr_sqrp(two_visits):
     with transaction() as cur:
         sid = samples.create(
             cur, v1, "CANON1", "sample", "  01 ", "NA", "libA",
+            ipr="01", iprp="01",
         )
         row = samples.get(cur, sid)
     assert row["SQR"] == "01"
@@ -129,6 +135,7 @@ def test_create_canonicalizes_na_sqr(two_visits):
     with transaction() as cur:
         sid = samples.create(
             cur, v1, "CANON2", "sample", "n/a", "", "libA",
+            ipr="01", iprp="01",
         )
         row = samples.get(cur, sid)
     assert row["SQR"] == ""
@@ -138,7 +145,7 @@ def test_create_canonicalizes_na_sqr(two_visits):
 def test_update_canonicalizes_sqr(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "CANON3", "sample", "05", "06", "libA")
+        sid = samples.create(cur, v1, "CANON3", "sample", "05", "06", "libA", ipr="01", iprp="01")
         samples.update(cur, sid, sqr=" 07 ", sqrp="N/A")
         row = samples.get(cur, sid)
     assert row["SQR"] == "07"
@@ -148,7 +155,7 @@ def test_update_canonicalizes_sqr(two_visits):
 def test_create_allows_null_antibody_class(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "SAMP_NO_AB", "input", "SQR1", "SQRP1", "libA")
+        sid = samples.create(cur, v1, "SAMP_NO_AB", "input", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
         row = samples.get(cur, sid)
     assert row["antibody_class"] is None
 
@@ -157,10 +164,10 @@ def test_create_duplicate_name_raises(two_visits):
     """sample_name is GLOBALLY unique — duplicates across visits also fail."""
     v1, v2 = two_visits
     with transaction() as cur:
-        samples.create(cur, v1, "DUP", "sample", "SQR1", "SQRP1", "libA")
+        samples.create(cur, v1, "DUP", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
     with pytest.raises(mariadb.IntegrityError):
         with transaction() as cur:
-            samples.create(cur, v2, "DUP", "sample", "SQR2", "SQRP2", "libB")
+            samples.create(cur, v2, "DUP", "sample", "SQR2", "SQRP2", "libB", ipr="01", iprp="01")
 
 
 def test_create_unknown_visit_id_raises(two_visits):
@@ -168,6 +175,7 @@ def test_create_unknown_visit_id_raises(two_visits):
         with transaction() as cur:
             samples.create(
                 cur, 9_999_999, "ORPHAN", "sample", "SQR1", "SQRP1", "libA",
+                ipr="01", iprp="01",
             )
 
 
@@ -175,7 +183,7 @@ def test_create_invalid_sample_type_raises(two_visits):
     v1, _ = two_visits
     with pytest.raises(mariadb.Error):
         with transaction() as cur:
-            samples.create(cur, v1, "BADTYPE", "wrong", "SQR1", "SQRP1", "libA")
+            samples.create(cur, v1, "BADTYPE", "wrong", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
 
 
 def test_get_missing_returns_none(two_visits):
@@ -191,7 +199,7 @@ def test_get_by_name_missing_returns_none(two_visits):
 def test_get_by_name_returns_row(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "BYNAME", "sample", "SQR1", "SQRP1", "libA")
+        sid = samples.create(cur, v1, "BYNAME", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
         row = samples.get_by_name(cur, "BYNAME")
     assert row["sample_id"] == sid
 
@@ -206,6 +214,7 @@ def test_get_or_create_inserts_when_missing(two_visits):
         sid, created = samples.get_or_create(
             cur, v1, "GOC", "sample", "SQR1", "SQRP1", "libA",
             antibody_class="IgG",
+            ipr="01", iprp="01",
         )
     assert created is True
     with transaction() as cur:
@@ -218,11 +227,13 @@ def test_get_or_create_returns_existing_without_modifying(two_visits):
         first_id = samples.create(
             cur, v1, "GOC2", "sample", "SQR1", "SQRP1", "libA",
             antibody_class="IgG",
+            ipr="01", iprp="01",
         )
     with transaction() as cur:
         sid, created = samples.get_or_create(
             cur, v2, "GOC2", "input", "SQR9", "SQRP9", "libZ",
             antibody_class="ignored",
+            ipr="01", iprp="01",
         )
     assert sid == first_id
     assert created is False
@@ -240,9 +251,9 @@ def test_get_or_create_returns_existing_without_modifying(two_visits):
 def test_list_for_visit_orders_by_sample_id(two_visits):
     v1, v2 = two_visits
     with transaction() as cur:
-        a = samples.create(cur, v1, "A", "sample", "SQR1", "SQRP1", "libA")
-        b = samples.create(cur, v1, "B", "input",  "SQR1", "SQRP1", "libA")
-        samples.create(cur, v2, "C", "sample", "SQR1", "SQRP1", "libA")
+        a = samples.create(cur, v1, "A", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
+        b = samples.create(cur, v1, "B", "input",  "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
+        samples.create(cur, v2, "C", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
     with transaction() as cur:
         rows = samples.list_for_visit(cur, v1)
     assert [r["sample_id"] for r in rows] == [a, b]
@@ -258,9 +269,9 @@ def test_list_for_visit_rejects_unknown_order_by(two_visits):
 def test_count_for_visit_isolated_per_visit(two_visits):
     v1, v2 = two_visits
     with transaction() as cur:
-        samples.create(cur, v1, "A", "sample", "SQR1", "SQRP1", "libA")
-        samples.create(cur, v1, "B", "input",  "SQR1", "SQRP1", "libA")
-        samples.create(cur, v2, "C", "sample", "SQR1", "SQRP1", "libA")
+        samples.create(cur, v1, "A", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
+        samples.create(cur, v1, "B", "input",  "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
+        samples.create(cur, v2, "C", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
     with transaction() as cur:
         assert samples.count_for_visit(cur, v1) == 2
         assert samples.count_for_visit(cur, v2) == 1
@@ -276,6 +287,7 @@ def test_update_partial_only_changes_provided_fields(two_visits):
         sid = samples.create(
             cur, v1, "U1", "sample", "SQR1", "SQRP1", "libA",
             antibody_class="IgG",
+            ipr="01", iprp="01",
         )
     with transaction() as cur:
         changed = samples.update(cur, sid, library="libB")
@@ -290,7 +302,7 @@ def test_update_partial_only_changes_provided_fields(two_visits):
 def test_update_with_all_none_is_noop(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "U2", "sample", "SQR1", "SQRP1", "libA")
+        sid = samples.create(cur, v1, "U2", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
     with transaction() as cur:
         assert samples.update(cur, sid) is False
 
@@ -303,7 +315,7 @@ def test_update_unknown_id_returns_false(two_visits):
 def test_update_does_not_expose_visit_id(two_visits):
     v1, v2 = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "MOVE", "sample", "SQR1", "SQRP1", "libA")
+        sid = samples.create(cur, v1, "MOVE", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
         with pytest.raises(TypeError):
             samples.update(cur, sid, visit_id=v2)
 
@@ -315,7 +327,7 @@ def test_update_does_not_expose_visit_id(two_visits):
 def test_delete_returns_true_when_row_removed(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "D1", "sample", "SQR1", "SQRP1", "libA")
+        sid = samples.create(cur, v1, "D1", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
     with transaction() as cur:
         assert samples.delete(cur, sid) is True
         assert samples.get(cur, sid) is None
@@ -329,7 +341,7 @@ def test_delete_unknown_id_returns_false(two_visits):
 def test_delete_cascades_to_sample_metadata(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "DCASC", "sample", "SQR1", "SQRP1", "libA")
+        sid = samples.create(cur, v1, "DCASC", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
         cur.execute(
             "INSERT INTO sample_metadata "
             "(sample_id, key_name, value_text, value_type) VALUES (?, ?, ?, ?)",
@@ -348,7 +360,7 @@ def test_delete_blocked_by_sample_files(two_visits):
     while a file row references the sample."""
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "DREST", "sample", "SQR1", "SQRP1", "libA")
+        sid = samples.create(cur, v1, "DREST", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
         cur.execute(
             "INSERT INTO sample_files "
             "(sample_id, file_type, file_path) VALUES (?, ?, ?)",
@@ -362,7 +374,7 @@ def test_delete_blocked_by_sample_files(two_visits):
 def test_exists_by_id(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        sid = samples.create(cur, v1, "E1", "sample", "SQR1", "SQRP1", "libA")
+        sid = samples.create(cur, v1, "E1", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
     with transaction() as cur:
         assert samples.exists(cur, sid) is True
         assert samples.exists(cur, 9_999_999) is False
@@ -371,7 +383,7 @@ def test_exists_by_id(two_visits):
 def test_exists_by_name(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
-        samples.create(cur, v1, "E2", "sample", "SQR1", "SQRP1", "libA")
+        samples.create(cur, v1, "E2", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
     with transaction() as cur:
         assert samples.exists(cur, name="E2") is True
         assert samples.exists(cur, name="missing") is False

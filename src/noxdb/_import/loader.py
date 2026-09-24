@@ -47,6 +47,8 @@ class SampleRow:
     subject_code: str
     timepoint: str
     sample_type: str
+    ipr: str
+    iprp: str
     sqr: str
     sqrp: str
     library: str
@@ -243,6 +245,8 @@ def _load_samples(path: Path) -> tuple[list[SampleRow], list[str]]:
                     subject_code=r["subject_code"].strip(),
                     timepoint=r["timepoint"].strip(),
                     sample_type=r["sample_type"].strip(),
+                    ipr=r["ipr"].strip(),
+                    iprp=r["iprp"].strip(),
                     sqr=r["sqr"].strip(),
                     sqrp=r["sqrp"].strip(),
                     library=r["library"].strip(),

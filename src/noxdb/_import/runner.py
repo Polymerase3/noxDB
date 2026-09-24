@@ -107,7 +107,9 @@ def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
                 f"samples.csv row {r.row_num}: sample_type={r.sample_type!r} "
                 f"not in {sorted(schema.ALLOWED_SAMPLE_TYPE)}"
             )
-        for fld, val in (("sqr", r.sqr), ("sqrp", r.sqrp)):
+        for fld, val in (
+            ("ipr", r.ipr), ("iprp", r.iprp), ("sqr", r.sqr), ("sqrp", r.sqrp),
+        ):
             try:
                 schema.validate_plate_id(
                     val, field=f"samples.csv row {r.row_num}.{fld}"
@@ -131,7 +133,7 @@ def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
 
 
 def _plate_warnings(bundle: loader.ProjectBundle) -> list[str]:
-    """Surface SQR/SQRP values that get normalized on the way in.
+    """Surface IPR/IPRP/SQR/SQRP values that get normalized on the way in.
 
     Canonicalization (whitespace strip, ``NA``/empty → ``""``) happens
     silently in :func:`samples.create`; echoing it as an import warning
@@ -142,7 +144,9 @@ def _plate_warnings(bundle: loader.ProjectBundle) -> list[str]:
     """
     warnings: list[str] = []
     for r in bundle.samples:
-        for fld, val in (("sqr", r.sqr), ("sqrp", r.sqrp)):
+        for fld, val in (
+            ("ipr", r.ipr), ("iprp", r.iprp), ("sqr", r.sqr), ("sqrp", r.sqrp),
+        ):
             try:
                 _canon, warn = schema.validate_plate_id(
                     val, field=f"samples.csv row {r.row_num}.{fld}"
@@ -317,7 +321,8 @@ def _commit(
         vid = visit_ids[(sm.subject_code, sm.timepoint)]
         sid, created = samples.get_or_create(
             cur, vid, sm.sample_name, sm.sample_type, sm.sqr, sm.sqrp,
-            sm.library, antibody_class=sm.antibody_class,
+            sm.library, ipr=sm.ipr, iprp=sm.iprp,
+            antibody_class=sm.antibody_class,
         )
         sample_ids[sm.sample_name] = sid
         counts["samples"]["inserted" if created else "existing"] += 1
@@ -336,13 +341,11 @@ def _commit(
     # occupy wells 81-96 of the IP plate, and a plate's samples can be
     # split across sequencing runs. Match on the canonical form, since
     # samples.create stored canonical IPR/IPRP.
-    ip_coords = set()
-    for sm in bundle.samples:
-        if sm.sample_type != "sample":
-            continue
-        coords = samples.ip_coords_from_name(sm.sample_name)
-        if coords is not None:
-            ip_coords.add(coords)
+    ip_coords = {
+        (samples.canonical_plate_id(sm.ipr), samples.canonical_plate_id(sm.iprp))
+        for sm in bundle.samples
+        if sm.sample_type == "sample"
+    }
     for ipr, iprp in ip_coords:
         cur.execute(
             "SELECT sample_id FROM samples "

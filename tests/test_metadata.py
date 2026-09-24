@@ -124,7 +124,7 @@ def parent_ids(_init_pool):
         projects.create(cur, "MPROJ")
         sid = subjects.create(cur, "S1", "F")
         vid = visits.create(cur, sid, "control", 30, timepoint="baseline")
-        smp = samples.create(cur, vid, "SMP1", "sample", "SQR1", "SQRP1", "libA")
+        smp = samples.create(cur, vid, "SMP1", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
     yield vid, smp
     with transaction() as cur:
         wipe_all(cur)

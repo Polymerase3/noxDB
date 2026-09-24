@@ -24,38 +24,46 @@ def sweep():
 
 def test_padding_difference_is_one_identity(sweep):
     """The case this check exists for: one specimen registered twice."""
-    padded = sweep._sample_identity("R05P01_01_0474408_KielP01_A_T_C2")
-    unpadded = sweep._sample_identity("R05P01_1_0474408_KielP01_A_T_C2")
+    padded = sweep._sample_identity("R05P01_01_0474408_KielP01_A_T_C2", "05", "01")
+    unpadded = sweep._sample_identity("R05P01_1_0474408_KielP01_A_T_C2", "05", "01")
     assert padded == unpadded
 
 
 def test_different_well_is_a_different_sample(sweep):
-    a = sweep._sample_identity("R05P01_01_0474408_KielP01_A_T_C2")
-    b = sweep._sample_identity("R05P01_02_0474414_KielP01_A_T_C2")
+    a = sweep._sample_identity("R05P01_01_0474408_KielP01_A_T_C2", "05", "01")
+    b = sweep._sample_identity("R05P01_02_0474414_KielP01_A_T_C2", "05", "01")
     assert a != b
 
 
 def test_different_plate_is_a_different_sample(sweep):
-    a = sweep._sample_identity("R05P01_01_0474408_KielP01_A_T_C2")
-    b = sweep._sample_identity("R05P02_01_0474408_KielP01_A_T_C2")
+    a = sweep._sample_identity("R05P01_01_0474408_KielP01_A_T_C2", "05", "01")
+    b = sweep._sample_identity("R05P02_01_0474408_KielP01_A_T_C2", "05", "02")
+    assert a != b
+
+
+def test_plate_is_the_stored_one_not_the_name_prefix(sweep):
+    """Two plates that files labelled alike are still two plates."""
+    a = sweep._sample_identity("R08P01_01_x_A_T_C2", "08", "01")
+    b = sweep._sample_identity("R08P01_01_x_A_T_C2", "08", "04")
     assert a != b
 
 
 def test_leading_zeros_after_the_well_are_significant(sweep):
     """Only the well is re-padded — a subject id's zeros carry meaning."""
-    a = sweep._sample_identity("R05P01_01_0474408_KielP01_A_T_C2")
-    b = sweep._sample_identity("R05P01_01_474408_KielP01_A_T_C2")
+    a = sweep._sample_identity("R05P01_01_0474408_KielP01_A_T_C2", "05", "01")
+    b = sweep._sample_identity("R05P01_01_474408_KielP01_A_T_C2", "05", "01")
     assert a != b
 
 
 @pytest.mark.parametrize(
-    "name",
+    "name, ipr",
     [
-        "R02_input_01_A_T_C2",   # run-only name: no well to compare
-        "no_coordinates_here",
-        "",
-        None,
+        ("R02_input_01_A_T_C2", "02"),   # run-only name: no well to compare
+        ("no_coordinates_here", "07"),
+        ("R05P01_01_x_A_T_C2", ""),      # no stored plate
+        ("", "05"),
+        (None, "05"),
     ],
 )
-def test_names_without_a_well_are_skipped(sweep, name):
-    assert sweep._sample_identity(name) is None
+def test_names_without_a_well_are_skipped(sweep, name, ipr):
+    assert sweep._sample_identity(name, ipr, "01") is None

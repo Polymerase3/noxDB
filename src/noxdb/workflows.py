@@ -114,6 +114,8 @@ def register_sample_with_files(
     visit_id: int,
     sample_name: str,
     sample_type: str,
+    ipr: str,
+    iprp: str,
     sqr: str,
     sqrp: str,
     library: str,
@@ -141,10 +143,11 @@ def register_sample_with_files(
         sample_name: Globally unique sample name.
         sample_type: See [`samples.create`][noxdb.samples.create]
             for allowed values. Used only on insert.
+        ipr: IP run, from the IP-runs overview sheet. Used only on
+            insert.
+        iprp: IP plate. Used only on insert.
         sqr: Sequencing run. Used only on insert.
-        sqrp: Sequencing plate. Used only on insert. The IP
-            coordinates are derived from *sample_name* by
-            [`samples.create`][noxdb.samples.create].
+        sqrp: Sequencing plate. Used only on insert.
         library: Used only on insert.
         antibody_class: Used only on insert.
         sample_metadata: Optional ``{key: value}`` upserted via
@@ -165,7 +168,7 @@ def register_sample_with_files(
     with _cur_ctx(cur) as c:
         sample_id, _ = samples.get_or_create(
             c, visit_id, sample_name, sample_type, sqr, sqrp, library,
-            antibody_class=antibody_class,
+            ipr=ipr, iprp=iprp, antibody_class=antibody_class,
         )
         if sample_metadata:
             for k, v in sample_metadata.items():

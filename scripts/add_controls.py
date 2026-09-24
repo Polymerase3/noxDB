@@ -24,9 +24,12 @@ So instead of inventing control projects, this script:
   * ``input`` samples still go to the dedicated ``input`` project, which
     schema 003 keeps (``queries.list_inputs`` depends on it).
 
-The IP coordinates come from each SampleName's ``RxxPxx``, canonicalized
-through ``noxdb.samples`` on both sides — they must agree byte-for-byte
-or the plate match misses. The Overview CSV's SQR/SQRP columns are the
+Study samples carry their IP coordinates in ``samples.csv``. A control's
+come from the "Overview of IP runs" sheet (``--ip-runs``), looking up the
+old ``RxxPxx`` of its SampleName in the sheet's ``Combined*`` column; a
+label the sheet gives to several plates is settled by which of them hold
+study samples, and skipped as an orphan if that still leaves more than
+one. The Overview CSV's SQR/SQRP columns are the
 *sequencing* run and plate and play no part in matching; a control and
 the samples it controls for share a plate, not necessarily a run.
 
@@ -43,7 +46,8 @@ import csv
 import sys
 from pathlib import Path
 
-from noxdb.samples import canonical_plate_id, ip_coords_from_name
+from noxdb.ip_runs import by_old_label, coords_for_old_name, load_plates
+from noxdb.samples import canonical_plate_id
 
 DEFAULT_LISC_ROOT = "/lisc/data/work/ccr/mariaDB"
 STORAGE_TIER = "work"
@@ -100,7 +104,7 @@ def _read_csv_set(path: Path, *cols: str) -> set[tuple]:
 def _build_plate_to_projects(samples_csv: Path) -> dict[tuple[str, str], set[str]]:
     """Map ``(IPR, IPRP) -> {study project_name}`` from real samples.
 
-    Keyed on the IP plate, read from each sample's name: a control
+    Keyed on the IP plate from the ``ipr``/``iprp`` columns: a control
     belongs to the plate it was pipetted onto, not to whichever
     sequencing run happened to read it. Only ``sample_type == 'sample'``
     rows define plate ownership — this mirrors the 003 migration's
@@ -115,10 +119,9 @@ def _build_plate_to_projects(samples_csv: Path) -> dict[tuple[str, str], set[str
         for row in reader:
             if (row.get("sample_type") or "").strip() != "sample":
                 continue
-            coords = ip_coords_from_name(row.get("sample_name", ""))
-            if coords is None:
+            key = _plate(row.get("ipr", ""), row.get("iprp", ""))
+            if not key[0]:
                 continue
-            key = _plate(*coords)
             out.setdefault(key, set()).add((row.get("project_name") or "").strip())
     return out
 
@@ -148,6 +151,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="Root of migrations/ (contains Overview_SQRs.csv).")
     p.add_argument("import_dir", type=Path,
                    help="Destination folder with existing master CSVs (migration_import/).")
+    p.add_argument("--ip-runs", type=Path, required=True,
+                   help="'Overview of IP runs TV(Overview)' CSV export.")
     p.add_argument("--lisc-root", default=DEFAULT_LISC_ROOT)
     args = p.parse_args(argv)
 
@@ -161,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: not found: {overview_path}", file=sys.stderr)
         return 2
 
+    ip_index = by_old_label(load_plates(args.ip_runs))
     samples_csv = import_dir / "samples.csv"
     plate_to_projects = _build_plate_to_projects(samples_csv)
     if not plate_to_projects:
@@ -191,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
 
     n_skipped = 0
     orphans: list[tuple[str, str, str]] = []  # (sample_name, sqr, sqrp)
-    n_no_ip_coords = 0    # SampleName carried no IP coordinates at all
+    n_no_ip_coords = 0    # no single plate for the SampleName in the IP runs sheet
 
     print(f"Scanning {overview_path.name}...")
 
@@ -214,7 +220,10 @@ def main(argv: list[str] | None = None) -> int:
             if sample_type == "sample":
                 continue
 
-            ip_coords = ip_coords_from_name(sample_name)
+            found = coords_for_old_name(ip_index, sample_name)
+            if sample_type != "input" and len(found) > 1:
+                found = [c for c in found if _plate(*c) in plate_to_projects]
+            ip_coords = found[0] if len(found) == 1 else None
             if ip_coords is None:
                 n_no_ip_coords += 1
 
@@ -293,6 +302,8 @@ def main(argv: list[str] | None = None) -> int:
                     "subject_code":   subject_code,
                     "timepoint":      timepoint,
                     "sample_type":    sample_type,
+                    "ipr":            ip_coords[0] if ip_coords else "",
+                    "iprp":           ip_coords[1] if ip_coords else "",
                     "sqr":            sqr,
                     "sqrp":           sqrp,
                     "library":        lib,
@@ -327,7 +338,8 @@ def main(argv: list[str] | None = None) -> int:
     _append_rows(import_dir / "visits.csv", visits_header, new_visits)
     _append_rows(samples_csv,
                  ["project_name", "sample_name", "subject_code", "timepoint",
-                  "sample_type", "sqr", "sqrp", "library", "antibody_class"],
+                  "sample_type", "ipr", "iprp", "sqr", "sqrp", "library",
+                  "antibody_class"],
                  new_samples)
     (import_dir / "files").mkdir(exist_ok=True)
     _append_rows(import_dir / "files" / "manifest.csv",
@@ -345,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
     if n_skipped:
         print(f"  skipped (already exist) : {n_skipped}")
     if n_no_ip_coords:
-        print(f"  no IP coordinates in the SampleName : {n_no_ip_coords}"
+        print(f"  no single plate in the IP runs sheet : {n_no_ip_coords}"
               "  (cannot be matched to a plate)")
     if orphans:
         print(f"  ORPHAN controls (no study project shares the plate) : {len(orphans)}")
@@ -354,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
         if len(orphans) > 20:
             print(f"    … and {len(orphans) - 20} more")
         print("  These were NOT written. Re-run prepare_migration or check "
-              "the RxxPxx in the SampleName if this is unexpected.")
+              "the IP runs sheet if this is unexpected.")
     return 0
 
 

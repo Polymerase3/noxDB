@@ -114,24 +114,28 @@ R25P01_89_NC_1_A_T_C2,R25P01_89_NC_1_A_T_C2,baseline,NC,12,03,A_T_C2,,
 | `subject_code` | **yes** | — | Must match `subjects.csv` for real samples. For controls, repeat the `sample_name` in this column (controls have no subject). |
 | `timepoint` | **yes** | — | Must match `visits.csv` for real samples. Use `baseline` for controls. |
 | `sample_type` | **yes** | `sample` `mockIP` `anchor` `NC` `input` | See table below. |
+| `ipr` | **yes** | integer string | **IP** run: column N (`IP run #`) of the "Overview of IP runs" sheet. Not the `Rxx` in the sample name — see below. |
+| `iprp` | **yes** | integer string | **IP** plate: column O (`Plate #`) of the same sheet. Empty for input samples. |
 | `sqr` | **yes** | integer string | **Sequencing** run number from your run sheet (zero-pad to 2 digits, e.g. `07`). Not the `Rxx` in the sample name — see below. |
 | `sqrp` | **yes** | integer string | **Sequencing** plate within that run. Leave empty for input samples if not applicable. |
 | `library` | **yes** | e.g. `A_T_C2` | Library combination string from your run sheet. |
 | `antibody_class` | no | free text | Only relevant for antibody-capture assays. |
 | `meta_*` | no | any | Sample-level metadata. |
 
-!!! warning "`sqr` is not the `Rxx` in the sample name"
+!!! warning "Never read `ipr` or `sqr` off the sample name"
 
-    A sample name like `R14P02_77_FAU0001_..` carries the
-    **immunoprecipitation** run and plate, `R14` and `P02`. The
-    sequencing coordinates are a different system entirely: this sample
-    was sequenced as run `07`, plate `02`. Read `sqr` / `sqrp` off the
-    run sheet and never off the name.
+    A sample name like `R14P02_77_FAU0001_..` starts with an IP run and
+    plate label, but that label was mistyped on some plates' files:
+    CORSA ran as IP run `04`, not the `R02` its files carry, and
+    PREDICTS P5/P6 are `R08P04`/`R08P05`, not the `R08P01`/`R08P02`
+    that PCa_Innsbruck also uses. Take `ipr` / `iprp` from columns N
+    and O of the "Overview of IP runs" sheet; its `Combined*` column
+    lists the old label each plate's files were named under.
+    [`noxdb.ip_runs`][noxdb.ip_runs] reads the sheet.
 
-    You do not supply the IP coordinates. noxDB reads them from
-    `sample_name` when the row is inserted and stores them in `IPR` /
-    `IPRP`, so there is no column for them here and no way for them to
-    disagree with the name.
+    The sequencing coordinates are a different system again: this
+    sample was sequenced as run `07`, plate `02`. Read `sqr` / `sqrp`
+    off the run sheet.
 
 ### sample_type values
 

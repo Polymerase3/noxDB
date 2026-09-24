@@ -10,6 +10,38 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-24
+
+### Changed
+- **`IPR`/`IPRP` come from the "Overview of IP runs" sheet, never from the
+  sample name.** Some plates' files were labelled with the wrong `RxxPxx`
+  (CORSA ran as IP run 04, not 02; PREDICTS P5/P6 are R08P04/P05, not the
+  R08P01/P02 that PCa_Innsbruck also uses), so the name is not a reliable
+  source. Columns N (`IP run #`) and O (`Plate #`) of the sheet are, and
+  are unique per plate.
+- **Breaking:** `samples.create`, `samples.get_or_create` and
+  `workflows.register_sample_with_files` take `ipr` and `iprp` as required
+  keyword arguments. Import bundles need `ipr` and `iprp` columns in
+  `samples.csv`. Plate-control auto-linking at import keys on those columns.
+- `scripts/prepare_migration.py` and `scripts/add_controls.py` take
+  `--ip-runs` and write `ipr`/`iprp` from the sheet.
+- The sweep's near-duplicate check compares the stored `IPR`/`IPRP`
+  instead of the name's prefix.
+
+### Added
+- `noxdb.ip_runs`: reads the sheet (`load_plates`), and translates the old
+  label a record was named under to the sheet's plate through its
+  `Combined*` column (`by_old_label`, `coords_for_old_name`), settling a
+  label two plates share by project.
+- `scripts/set_ip_coords_from_overview.py`: generates the SQL that rewrites
+  every stored `IPR`/`IPRP` from the sheet. On production it moves 1,117
+  rows on 16 plates (CORSA, COVID_NED, PSC-IBD-HC_UMCG, FRAmAbs and
+  unlinked PREDICTS/KielmAbs controls); inputs and the SQR01 pilot plates
+  R02P05/R02P06, which the sheet does not list, keep their stored values.
+
+### Removed
+- `samples.ip_coords_from_name`.
+
 ## [0.8.1] - 2026-09-23
 
 ### Added

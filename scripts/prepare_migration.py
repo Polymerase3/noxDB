@@ -19,10 +19,12 @@ Outputs (inside <output_dir>):
 SQR / SQRP are read from the meta CSV, because they are the *sequencing*
 run and plate and nothing in the sample name encodes them. The
 ``RxxPxx`` in the name is the IP run and plate, a different coordinate
-system; ``samples.create`` derives ``IPR``/``IPRP`` from the name on
-insert, so this script does not emit them. 0.7.3 conflated the two and
-backfilled IP values into SQR/SQRP — see ``NEWS.md`` for 0.8.0. A row
-with no SQR is reported in _warnings.txt and imports blank.
+system. That label is not trusted: ``IPR``/``IPRP`` come from the
+"Overview of IP runs" sheet (``--ip-runs``), looked up through its
+``Combined*`` column (see ``noxdb.ip_runs``). 0.7.3 conflated the two
+and backfilled IP values into SQR/SQRP — see ``NEWS.md`` for 0.8.0. A
+row with no SQR, or with no single plate in the sheet, is reported in
+_warnings.txt and imports blank.
 
 LISC file paths are constructed as:
     <lisc_root>/counts/{SampleName}.count.gz   → file_type=counts
@@ -37,6 +39,8 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+
+from noxdb.ip_runs import IPPlate, by_old_label, coords_for_old_name, load_plates
 
 
 # --------------------------------------------------------------------------- #
@@ -168,6 +172,7 @@ def _read_overview(path: Path) -> dict[str, tuple[str | None, str | None]]:
 def process_meta_files(
     meta_dir: Path,
     overview: dict[str, tuple[str | None, str | None]],
+    ip_index: dict[str, list[IPPlate]],
     lisc_root: str,
     warnings: list[str],
     drop_na: bool = False,
@@ -317,6 +322,14 @@ def process_meta_files(
                         f"{sample_name!r} — the sequencing run is only "
                         f"knowable from the sheet, so this row imports blank"
                     )
+                found = coords_for_old_name(ip_index, sample_name, {project})
+                ipr, iprp = found[0] if len(found) == 1 else ("", "")
+                if len(found) != 1:
+                    warnings.append(
+                        f"{meta_file.name} row {row_num}: "
+                        f"{'no' if not found else len(found)} IP plates in the "
+                        f"IP runs sheet for {sample_name!r} — imports blank"
+                    )
                 lib   = _extract_library(sample_name)
 
                 samples_rows.append({
@@ -325,6 +338,8 @@ def process_meta_files(
                     "subject_code":   subject_code,
                     "timepoint":      timepoint,
                     "sample_type":    sample_type,
+                    "ipr":            ipr,
+                    "iprp":           iprp,
                     "sqr":            sqr,
                     "sqrp":           sqrp,
                     "library":        lib,
@@ -385,6 +400,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Root of the migrations/ folder.")
     p.add_argument("output_dir", type=Path,
                    help="Destination folder for master CSVs (created if absent).")
+    p.add_argument("--ip-runs", type=Path, required=True,
+                   help="'Overview of IP runs TV(Overview)' CSV export.")
     p.add_argument("--lisc-root", default=DEFAULT_LISC_ROOT,
                    help=f"Base path on LISC (default: {DEFAULT_LISC_ROOT}).")
     p.add_argument("--drop-na", action="store_true",
@@ -418,7 +435,10 @@ def main(argv: list[str] | None = None) -> int:
         samples_rows,
         manifest_rows,
         meta_keys,
-    ) = process_meta_files(meta_dir, overview, lisc_root, warnings, drop_na=args.drop_na)
+    ) = process_meta_files(
+        meta_dir, overview, by_old_label(load_plates(args.ip_runs)),
+        lisc_root, warnings, drop_na=args.drop_na,
+    )
 
     # ── Write CSVs ────────────────────────────────────────────────────────────
 
@@ -443,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
     _write_csv(
         output_dir / "samples.csv",
         ["project_name", "sample_name", "subject_code", "timepoint",
-         "sample_type", "sqr", "sqrp", "library", "antibody_class"],
+         "sample_type", "ipr", "iprp", "sqr", "sqrp", "library", "antibody_class"],
         samples_rows,
     )
 
