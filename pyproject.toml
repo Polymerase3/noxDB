@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "noxdb"
-version = "0.10.0"
+version = "0.11.0"
 description = "Schema, migrations, and Python tooling for the lab's MariaDB metadata database."
 requires-python = ">=3.10"
 authors = [
@@ -13,9 +13,7 @@ authors = [
 ]
 dependencies = [
     "mariadb>=1.1.10",
-    "sshtunnel>=0.4.0",
-    # sshtunnel 0.4.0 references paramiko.DSSKey, removed in paramiko 4.x
-    "paramiko>=3.0,<4.0",
+    "paramiko>=3.0",
     "pyyaml>=6.0",
 ]
 

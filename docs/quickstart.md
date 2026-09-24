@@ -90,8 +90,8 @@ close_pool()
 
 `init_pool()` checks whether `local_port` (3307) is already bound. If it is,
 it connects through the existing tunnel without opening a new one. If it is
-not, and `[noxdb-ssh]` gives an `ssh_host`, it opens its own tunnel with
-`sshtunnel` and closes it again on `close_pool()`. Starting the tunnel
+not, and `[noxdb-ssh]` gives an `ssh_host`, it opens its own tunnel by running
+`ssh -N -L` in the background and closes it again on `close_pool()`. Starting the tunnel
 yourself is still the recommended way, because one long-lived tunnel is
 easier to see and to kill than one opened per session.
 

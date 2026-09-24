@@ -1,20 +1,26 @@
-"""Unit tests for SSH tunnel credential resolution.
+"""Unit tests for SSH tunnel credential resolution and the OpenSSH tunnel.
 
-These tests exercise `_resolve_ssh_credentials` and `_load_ssh_credentials`
-without opening a real tunnel. The opt-in integration test at the bottom is
-skipped unless `NOXDB_SSH_HOST` is set in the environment.
+These tests exercise `_resolve_ssh_credentials`, `_load_ssh_credentials` and
+`_open_tunnel` without a real SSH server: the ssh command is swapped for a
+small Python process. The opt-in integration test at the bottom is skipped
+unless `NOXDB_SSH_HOST` is set in the environment.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
 
+from noxdb import connection
 from noxdb.connection import (
+    _is_port_open,
     _load_ssh_credentials,
+    _open_tunnel,
     _resolve_ssh_credentials,
+    _ssh_command,
 )
 
 
@@ -144,6 +150,80 @@ def test_resolve_ssh_config_path_none_still_reads_env(monkeypatch):
     monkeypatch.setenv("NOXDB_SSH_USER", "alice")
     creds = _resolve_ssh_credentials(None, "noxdb-ssh", {})
     assert creds == {"ssh_host": "h.example", "ssh_user": "alice"}
+
+
+# --------------------------------------------------------------------------- #
+# _open_tunnel: the ssh command is replaced by a Python stand-in
+# --------------------------------------------------------------------------- #
+
+CREDS = {"ssh_host": "jump.example.org", "ssh_user": "someone"}
+
+
+def _fake_ssh(monkeypatch, script: str) -> None:
+    """Run *script* instead of ssh; it gets the local port as argv[1]."""
+    monkeypatch.setattr(
+        connection, "_ssh_command",
+        lambda creds, host, port, local_port: [sys.executable, "-c", script, str(local_port)],
+    )
+
+
+def test_ssh_command_full():
+    cmd = _ssh_command(
+        {**CREDS, "ssh_port": 2222, "ssh_pkey": "~/.ssh/id_ed25519"},
+        "mariadb.lisc", 3306, 40000,
+    )
+    assert cmd[:2] == ["ssh", "-N"]
+    assert "BatchMode=yes" in cmd and "ExitOnForwardFailure=yes" in cmd
+    assert cmd[cmd.index("-L") + 1] == "127.0.0.1:40000:mariadb.lisc:3306"
+    assert cmd[cmd.index("-p") + 1] == "2222"
+    assert cmd[cmd.index("-i") + 1] == str(Path("~/.ssh/id_ed25519").expanduser())
+    assert cmd[-1] == "someone@jump.example.org"
+
+
+def test_ssh_command_defaults_port_22_and_no_key():
+    cmd = _ssh_command(CREDS, "db", 3306, 40000)
+    assert cmd[cmd.index("-p") + 1] == "22"
+    assert "-i" not in cmd
+
+
+def test_open_tunnel_missing_user_raises():
+    with pytest.raises(RuntimeError, match="ssh_user"):
+        _open_tunnel({"ssh_host": "jump.example.org"}, "db", 3306)
+
+
+def test_open_tunnel_reports_ssh_stderr(monkeypatch):
+    _fake_ssh(monkeypatch, "import sys; sys.stderr.write('Permission denied (publickey).'); sys.exit(255)")
+    with pytest.raises(RuntimeError, match=r"jump\.example\.org:22: Permission denied \(publickey\)"):
+        _open_tunnel(CREDS, "db", 3306)
+
+
+def test_open_tunnel_ssh_not_found(monkeypatch):
+    monkeypatch.setattr(
+        connection, "_ssh_command", lambda *a: ["/nonexistent/ssh"]
+    )
+    with pytest.raises(RuntimeError, match="not on PATH"):
+        _open_tunnel(CREDS, "db", 3306)
+
+
+def test_open_tunnel_times_out(monkeypatch):
+    monkeypatch.setattr(connection, "TUNNEL_START_TIMEOUT", 0.5)
+    _fake_ssh(monkeypatch, "import time; time.sleep(30)")
+    with pytest.raises(RuntimeError, match="no listener"):
+        _open_tunnel(CREDS, "db", 3306)
+
+
+def test_open_tunnel_listens_then_stop_ends_process(monkeypatch):
+    _fake_ssh(monkeypatch, (
+        "import socket, sys, time\n"
+        "s = socket.socket(); s.bind(('127.0.0.1', int(sys.argv[1]))); s.listen()\n"
+        "time.sleep(30)\n"
+    ))
+    tunnel = _open_tunnel(CREDS, "db", 3306)
+    host, port = tunnel.local_bind_address
+    assert host == "127.0.0.1" and _is_port_open(port)
+    tunnel.stop()
+    assert tunnel._proc.poll() is not None
+    assert not _is_port_open(port)
 
 
 # --------------------------------------------------------------------------- #

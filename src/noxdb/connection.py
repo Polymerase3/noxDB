@@ -21,9 +21,13 @@ parameters and ``init_pool()`` will open a local-port-forwarding tunnel before
 creating the pool. The DB ``host``/``port`` you configure are interpreted as
 the *remote* DB endpoint (i.e. the Galera cluster as seen from the VM).
 
+The tunnel is an OpenSSH ``ssh -N -L`` subprocess, so it needs the ``ssh``
+client on PATH and a login that works without a prompt: a key without a
+passphrase, or one loaded into ``ssh-agent``. Password login is not
+supported for the tunnel.
+
 SSH parameters (kwargs > ``NOXDB_SSH_*`` env vars > ``[noxdb-ssh]`` INI section):
-    ssh_host, ssh_port (default 22), ssh_user, ssh_password, ssh_pkey,
-    ssh_pkey_password.
+    ssh_host, ssh_port (default 22), ssh_user, ssh_pkey.
 
 If ``ssh_host`` is unset the tunnel is skipped and the driver connects
 directly to ``host:port`` (useful when running on the VM itself).
@@ -41,6 +45,9 @@ import logging
 import os
 import re
 import socket
+import subprocess
+import tempfile
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
@@ -56,7 +63,7 @@ DEFAULT_DATABASE = "ccr_metadata"
 
 _pool: mariadb.ConnectionPool | None = None
 _pool_counter = 0  # appended to pool_name so re-inits do not collide
-_tunnel: Any = None  # SSHTunnelForwarder | None; Any avoids importing sshtunnel at module load
+_tunnel: _SshTunnel | None = None
 
 _logger = logging.getLogger("noxdb.audit")
 _logger.setLevel(logging.INFO)
@@ -214,6 +221,8 @@ def _resolve_credentials(
 # SSH tunnel
 # --------------------------------------------------------------------------- #
 
+# ssh_password / ssh_pkey_password are read for fetch.py's SFTP downloads only;
+# the tunnel (OpenSSH, BatchMode) ignores them.
 _SSH_ENV_MAP = {
     "ssh_host": "NOXDB_SSH_HOST",
     "ssh_port": "NOXDB_SSH_PORT",
@@ -287,54 +296,97 @@ def _is_port_open(port: int) -> bool:
             return False
 
 
+TUNNEL_START_TIMEOUT = 15  # seconds to wait for ssh to bind the local port
+
+
+class _SshTunnel:
+    """An ``ssh -N -L`` subprocess forwarding a local port to the DB."""
+
+    def __init__(self, proc: subprocess.Popen, local_port: int, log: Any) -> None:
+        self._proc = proc
+        self._log = log  # temp file holding ssh's stderr
+        self.local_bind_address = ("127.0.0.1", local_port)
+
+    def stop(self) -> None:
+        if self._proc.poll() is None:
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+                self._proc.wait()
+        self._log.close()
+
+
+def _free_local_port() -> int:
+    """Return a port on 127.0.0.1 that is free right now."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _ssh_command(
+    ssh_creds: dict[str, Any], remote_host: str, remote_port: int, local_port: int
+) -> list[str]:
+    """Build the ``ssh -N -L`` command line for the tunnel."""
+    cmd = [
+        "ssh", "-N",
+        "-o", "BatchMode=yes",
+        "-o", "ExitOnForwardFailure=yes",
+        "-o", "ServerAliveInterval=30",
+        "-o", "LogLevel=ERROR",
+        "-L", f"127.0.0.1:{local_port}:{remote_host}:{int(remote_port)}",
+        "-p", str(int(ssh_creds.get("ssh_port", 22))),
+    ]
+    if ssh_creds.get("ssh_pkey"):
+        cmd += ["-i", str(Path(ssh_creds["ssh_pkey"]).expanduser())]
+    cmd.append(f"{ssh_creds['ssh_user']}@{ssh_creds['ssh_host']}")
+    return cmd
+
+
 def _open_tunnel(
     ssh_creds: dict[str, Any],
     remote_host: str,
     remote_port: int,
-    local_port: int = 0,
-) -> Any:
-    """Start an SSH tunnel forwarding 127.0.0.1:<local_port> -> remote_host:remote_port.
+) -> _SshTunnel:
+    """Start an OpenSSH tunnel forwarding a free 127.0.0.1 port -> remote_host:remote_port.
 
-    Pass ``local_port=0`` (default) to let the OS assign a free port.
+    ssh runs with ``BatchMode=yes``, so it fails instead of prompting when
+    the key needs a passphrase that no agent holds or the host key is unknown.
     """
-    try:
-        from sshtunnel import SSHTunnelForwarder
-    except ImportError as exc:
-        raise RuntimeError(
-            "sshtunnel is required for SSH-tunneled connections. "
-            "Reinstall the package or run: pip install sshtunnel"
-        ) from exc
-
     if not ssh_creds.get("ssh_user"):
         raise RuntimeError(
             "Cannot open SSH tunnel: 'ssh_user' is missing. "
             "Provide it via init_pool(ssh_user=...), NOXDB_SSH_USER, or the [noxdb-ssh] config section."
         )
 
-    kwargs: dict[str, Any] = {
-        "ssh_username": ssh_creds["ssh_user"],
-        "remote_bind_address": (remote_host, int(remote_port)),
-        "local_bind_address": ("127.0.0.1", local_port),
-    }
-    # Auth: pass whichever credentials the user gave; paramiko prefers key over
-    # password when both are present, and falls back to the agent / default
-    # ~/.ssh/id_* keys when neither is set (look_for_keys is on by default).
-    if ssh_creds.get("ssh_pkey"):
-        kwargs["ssh_pkey"] = str(Path(ssh_creds["ssh_pkey"]).expanduser())
-        if ssh_creds.get("ssh_pkey_password"):
-            kwargs["ssh_private_key_password"] = ssh_creds["ssh_pkey_password"]
-    if ssh_creds.get("ssh_password"):
-        kwargs["ssh_password"] = ssh_creds["ssh_password"]
-
-    ssh_address = (ssh_creds["ssh_host"], int(ssh_creds.get("ssh_port", 22)))
-
+    local_port = _free_local_port()
+    cmd = _ssh_command(ssh_creds, remote_host, remote_port, local_port)
+    target = f"{ssh_creds['ssh_host']}:{int(ssh_creds.get('ssh_port', 22))}"
+    log = tempfile.TemporaryFile()
     try:
-        tunnel = SSHTunnelForwarder(ssh_address, **kwargs)
-        tunnel.start()
-    except Exception as exc:
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log
+        )
+    except FileNotFoundError as exc:
+        log.close()
         raise RuntimeError(
-            f"Failed to open SSH tunnel to {ssh_address[0]}:{ssh_address[1]}: {exc}"
+            "Cannot open SSH tunnel: the OpenSSH client 'ssh' is not on PATH."
         ) from exc
+
+    tunnel = _SshTunnel(proc, local_port, log)
+    deadline = time.monotonic() + TUNNEL_START_TIMEOUT
+    while not _is_port_open(local_port):
+        if proc.poll() is not None or time.monotonic() > deadline:
+            if proc.poll() is None:
+                reason = f"no listener on port {local_port} after {TUNNEL_START_TIMEOUT}s"
+            else:
+                log.seek(0)
+                reason = log.read().decode(errors="replace").strip()
+                reason = reason or f"ssh exited with code {proc.returncode}"
+            tunnel.stop()
+            raise RuntimeError(f"Failed to open SSH tunnel to {target}: {reason}")
+        time.sleep(0.1)
     return tunnel
 
 
@@ -424,9 +476,7 @@ def init_pool(
     ssh_host: str | None = None,
     ssh_port: int | None = None,
     ssh_user: str | None = None,
-    ssh_password: str | None = None,
     ssh_pkey: str | None = None,
-    ssh_pkey_password: str | None = None,
 ) -> None:
     """Create the connection pool.
 
@@ -450,9 +500,8 @@ def init_pool(
         ssh_host: SSH jump host. When non-empty, a tunnel is opened.
         ssh_port: SSH port (default 22).
         ssh_user: SSH username.
-        ssh_password: SSH password (used if ``ssh_pkey`` not set).
-        ssh_pkey: Path to private key. Tried first for auth.
-        ssh_pkey_password: Passphrase for ``ssh_pkey``, if any.
+        ssh_pkey: Path to private key, passed to ``ssh -i``. Without it
+            ssh uses the agent and its default ``~/.ssh/id_*`` keys.
 
     Raises:
         RuntimeError: If the pool is already initialized (call
@@ -486,9 +535,7 @@ def init_pool(
             "ssh_host": ssh_host,
             "ssh_port": ssh_port,
             "ssh_user": ssh_user,
-            "ssh_password": ssh_password,
             "ssh_pkey": ssh_pkey,
-            "ssh_pkey_password": ssh_pkey_password,
         },
     )
 
