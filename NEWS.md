@@ -10,6 +10,24 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-24
+
+### Changed
+- **The built-in SSH tunnel is now an OpenSSH `ssh -N -L` subprocess**
+  instead of `sshtunnel`/paramiko. The paramiko tunnel intermittently hung on
+  results of ~100+ rows (surfacing as "Lost connection to server during
+  query" / "Server has gone away"); the same queries over OpenSSH return in
+  milliseconds. `init_pool()` still reuses a tunnel already listening on
+  `local_port`, and `close_pool()` stops the one it started.
+- `sshtunnel` is no longer a dependency, and the `paramiko<4` cap (needed only
+  by `sshtunnel`) is dropped; paramiko stays for SFTP downloads.
+
+### Removed
+- `init_pool(ssh_password=..., ssh_pkey_password=...)`. The tunnel needs a
+  login without a prompt: a key without a passphrase or one held by
+  `ssh-agent`. Both settings are still read from `[noxdb-ssh]` for SFTP
+  downloads.
+
 ## [0.10.0] - 2026-09-24
 
 ### Added

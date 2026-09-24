@@ -149,14 +149,12 @@ What each field means:
 | `ssh_user`   | Your LiSC username (the one you use to SSH into the cluster)                     |
 | `ssh_pkey`   | Path to your **private** SSH key — usually `~/.ssh/id_ed25519` or `~/.ssh/id_rsa` |
 
-**Don't have an SSH key set up?** You have two options:
+The tunnel is opened with the OpenSSH `ssh` command, which must log in **without a prompt**. That means an SSH key: either one without a passphrase, or one whose passphrase is held by `ssh-agent` (`ssh-add ~/.ssh/id_ed25519`). Password login does not work for the tunnel. Run `ssh <your-lisc-username>@ccr-lab.lisc.univie.ac.at` once by hand first, so the host key is in `~/.ssh/known_hosts`.
 
-- **Option A (recommended):** Generate a key pair and upload the public key to the jump host. Run `ssh-keygen -t ed25519` and follow the prompts, then ask an admin to add your public key (`~/.ssh/id_ed25519.pub`) to the server.
-- **Option B:** Use your password instead. Replace `ssh_pkey` with:
+**Don't have an SSH key set up?** Generate a key pair and upload the public key to the jump host. Run `ssh-keygen -t ed25519` and follow the prompts, then ask an admin to add your public key (`~/.ssh/id_ed25519.pub`) to the server.
 
-    ```ini
-    ssh_password=<your-lisc-password>
-    ```
+!!! note
+    `ssh_password=<your-lisc-password>` in `[noxdb-ssh]` is still accepted for file downloads (`download_files_for_project`, `export_project`), which use SFTP. It is ignored by the database tunnel.
 
 !!! note
     If you are running your script directly on `ccr-lab` (i.e. you are already inside the LiSC network), you can skip this step entirely — the library will connect directly without an SSH tunnel when `ssh_host` is not set.
