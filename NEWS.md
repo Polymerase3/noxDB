@@ -10,6 +10,16 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-24
+
+### Added
+- The sweep's `db_size` section also reports the size of each data folder
+  under `ccr/mariaDB` on the work and archive roots (counts, zigp, FASTQ and
+  BAM tars) and how much each changed since the previous run.
+
+### Changed
+- `docs/quickstart.md` numbers regenerated from production (62 projects).
+
 ## [0.9.0] - 2026-09-24
 
 ### Changed

@@ -123,8 +123,10 @@ with transaction() as cur:
 | 58         | input              | Control samples (input DNA)                                              |
 | 82         | early_life         |                                                                          |
 | 85         | Michi_CART         |                                                                          |
+| …          | …                  | …                                                                        |
+| 127        | PREDICTS           | Ulcerative colitis+Crohns disease+HCs, NY/Arno, 2000 samples total       |
 
-20 projects total — 19 study projects + the `input` umbrella project.
+62 projects total — 61 study projects + the `input` umbrella project.
 The dedicated `mockIP` / `anchor` / `NC` projects were removed in
 migration `003`; those controls are now linked to the study projects
 that share their plate (see [§11](#11-plate-controls-for-a-project)).
@@ -143,13 +145,13 @@ with transaction() as cur:
 ```json
 {
   "project_id": 7,
-  "n_subjects": 175,
-  "n_visits": 175,
-  "n_samples": 175,
-  "n_files": 348,
+  "n_subjects": 179,
+  "n_visits": 179,
+  "n_samples": 179,
+  "n_files": 358,
   "files_by_type": {
-    "counts": 174,
-    "zigp_norm": 174
+    "counts": 179,
+    "zigp_norm": 179
   },
   "n_controls": 64,
   "controls_by_type": {
@@ -161,8 +163,8 @@ with transaction() as cur:
 ```
 
 `n_samples` counts **every** sample linked to the project via
-`project_samples`, controls included — here 111 study + 64 controls =
-175. `n_controls` / `controls_by_type` break out just the control
+`project_samples`, controls included — here 115 study + 64 controls =
+179. `n_controls` / `controls_by_type` break out just the control
 subset (matched onto the project's IP plates by IPR + IPRP at import /
 migration time).
 
@@ -196,7 +198,7 @@ sheet. They are different numbers for the same row, and the second row
 above shows a third pairing again. See
 [Two coordinate systems](schema.md#two-coordinate-systems).
 
-175 rows total (111 `sample` + 32 `mockIP` + 16 `anchor` + 16 `NC`).
+179 rows total (115 `sample` + 32 `mockIP` + 16 `anchor` + 16 `NC`).
 
 ### Real samples only
 
@@ -205,7 +207,7 @@ with transaction() as cur:
     df = queries.samples_for_project(cur, project_id=7, include_controls=False)
 ```
 
-111 rows.
+115 rows.
 
 ### Filtering by file presence
 
@@ -215,7 +217,7 @@ with transaction() as cur:
     df_without = queries.samples_for_project(cur, project_id=7, has_files=False)
 ```
 
-174 with files, 1 without (file filter applies to both real samples and controls).
+179 with files, 0 without (file filter applies to both real samples and controls).
 
 ---
 
@@ -238,7 +240,7 @@ with transaction() as cur:
 }
 ```
 
-175 subjects. `subjects` no longer carries a `project_id` (dropped in
+179 subjects. `subjects` no longer carries a `project_id` (dropped in
 migration `003`); `list_for_project` now traverses
 `project_samples → samples → visits → subjects`, so every subject with
 a sample in the project — control subjects included — is returned.
@@ -302,7 +304,7 @@ with transaction() as cur:
     dfm = queries.samples_with_metadata(cur, project_id=7)
 ```
 
-175 rows × 18 columns:
+179 rows × 18 columns:
 
 ```
 ['project_id', 'subject_id', 'subject_code', 'visit_id', 'timepoint',
@@ -330,7 +332,7 @@ with transaction() as cur:
 | 229     | 649       | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | baseline  | zigp_norm | /lisc/data/work/ccr/mariaDB/zigp/R14P02_77_FAU0001_ADMCI_NED_A_T_C2.csv             | None            | None         | work         | 2026-05-14 12:27:24 |
 | …       | …         | …                                  | …                                  | …         | …         | …                                                                            | …               | …            | …            | …                   |
 
-348 files total (174 `counts` + 174 `zigp_norm`).
+358 files total (179 `counts` + 179 `zigp_norm`).
 
 ---
 
@@ -346,7 +348,7 @@ with transaction() as cur:
     dft = queries.project_tidy_table(cur, project_id=7)
 ```
 
-Shape: 175 rows × 18 columns, the same set as §8.
+Shape: 179 rows × 18 columns, the same set as §8.
 
 ---
 
@@ -407,9 +409,10 @@ with transaction() as cur:
 | 15643     | R02_input_02_A_T_C2 | input       | 02  |      | 02  |      | A_T_C2  | 58         |
 | …         | …                   | …           | …   | …    | …   | …    | …       | …          |
 
-144 input rows total, in three series: `R02_input` (24), `R20_input` (24)
-and `R31_input` (96). The `R31` series has `counts` files only — no
-`zigp_norm` half exists for it.
+152 input rows total, in four series: `R01_input` (8), `R02_input` (24),
+`R20_input` (24) and `R31_input` (96). The `R31` series has `counts` files
+only — no `zigp_norm` half exists for it — and the `R01` series (SQR01
+NextSeq pilot) has no files yet.
 
 ---
 
@@ -473,13 +476,13 @@ finally:
 ```json
 {
   "project_id": 7,
-  "n_subjects": 175,
-  "n_visits": 175,
-  "n_samples": 175,
-  "n_files": 348,
+  "n_subjects": 179,
+  "n_visits": 179,
+  "n_samples": 179,
+  "n_files": 358,
   "files_by_type": {
-    "counts": 174,
-    "zigp_norm": 174
+    "counts": 179,
+    "zigp_norm": 179
   },
   "n_controls": 64,
   "controls_by_type": {
@@ -490,7 +493,7 @@ finally:
 }
 ```
 
-`dff` — first 6 rows of 348:
+`dff` — first 6 rows of 358:
 
 ```
  file_id                        sample_name file_type                                                              file_path storage_tier
@@ -531,7 +534,7 @@ Output directory layout:
 ```
 exports/ADMCI_NED/
 ├── README.txt     (209 bytes)
-└── metadata.csv   (25,155 bytes)
+└── metadata.csv   (25,712 bytes)
 ```
 
 `README.txt`:
@@ -543,14 +546,14 @@ Description: -
 Created: 2026-05-14 12:27:07
 
 Counts:
-  subjects: 175
-  visits:   175
-  samples:  175
-  files:    348
+  subjects: 179
+  visits:   179
+  samples:  179
+  files:    358
 
 Files by type:
-  counts: 174
-  zigp_norm: 174
+  counts: 179
+  zigp_norm: 179
 ```
 
 `result` (the return value):
@@ -558,7 +561,7 @@ Files by type:
 ```json
 {
   "project":  { "project_id": 7, "project_name": "ADMCI_NED", ... },
-  "summary":  { "n_subjects": 175, "n_files": 348, ... },
+  "summary":  { "n_subjects": 179, "n_files": 358, ... },
   "metadata": { "csv": "exports/ADMCI_NED/metadata.csv" },
   "files":    { "downloaded": [], "skipped": [], "failed": [], "output_dir": null },
   "readme":   "exports/ADMCI_NED/README.txt",

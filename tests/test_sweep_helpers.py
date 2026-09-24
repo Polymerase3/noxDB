@@ -67,3 +67,19 @@ def test_leading_zeros_after_the_well_are_significant(sweep):
 )
 def test_names_without_a_well_are_skipped(sweep, name, ipr):
     assert sweep._sample_identity(name, ipr, "01") is None
+
+
+def test_dir_sizes_counts_the_bytes_under_each_folder(sweep, tmp_path):
+    (tmp_path / "counts").mkdir()
+    (tmp_path / "counts" / "a.tsv").write_bytes(b"x" * 5000)
+    (tmp_path / "zigp").mkdir()
+    sizes = sweep.dir_sizes([tmp_path / "counts", tmp_path / "zigp"])
+    assert set(sizes) == {str(tmp_path / "counts"), str(tmp_path / "zigp")}
+    assert sizes[str(tmp_path / "counts")] >= 5000 > sizes[str(tmp_path / "zigp")]
+
+
+def test_fmt_bytes_uses_decimal_units(sweep):
+    assert sweep.fmt_bytes(512) == "512 B"
+    assert sweep.fmt_bytes(25_067_589_684) == "25.07 GB"
+    assert sweep.fmt_bytes(3_156_840_345_629) == "3.16 TB"
+    assert sweep.fmt_bytes(-2_500_000) == "-2.50 MB"

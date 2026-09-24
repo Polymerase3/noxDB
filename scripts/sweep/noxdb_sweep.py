@@ -47,7 +47,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Any
 
-from noxdb import close_pool, init_pool, projects, queries, transaction
+from noxdb import close_pool, files, init_pool, projects, queries, transaction
 
 # sqr_coverage lives next to this script; the tests load this file by path,
 # so its directory is not on sys.path by default.
@@ -79,6 +79,10 @@ UPTIME_WINDOW_DAYS = 30
 ROW_DROP_ERROR_PCT = 10.0
 
 CONTROL_TYPES = ("mockIP", "anchor", "NC")
+
+# The sequencing data itself sits here under each tier root (counts and
+# zigp on work, FASTQ and BAM tars on archive); each subfolder is sized.
+DATA_SUBDIR = "ccr/mariaDB"
 
 # Guards an identifier read back from information_schema before it is
 # interpolated into a query, since a table name cannot be bound.
@@ -695,8 +699,22 @@ def check_activity(cur) -> dict[str, Any]:
     }
 
 
+def dir_sizes(dirs: list[Path]) -> dict[str, int]:
+    """Bytes under each directory (apparent size, as ``du -sb`` reports it)."""
+    out = subprocess.run(["du", "-sb", *map(str, dirs)], capture_output=True, text=True, check=True).stdout
+    return {path: int(size) for size, path in (line.split("\t", 1) for line in out.splitlines())}
+
+
+def fmt_bytes(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if abs(n) < 1000:
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.2f} {unit}"
+        n /= 1000
+    return f"{n:.2f} TB"
+
+
 def check_db_size(cur) -> dict[str, Any]:
-    """On-disk size of the database itself, per table."""
+    """On-disk size of the database itself, per table, and of the data folders."""
     cur.execute(
         "SELECT table_name, data_length, index_length, table_rows "
         "FROM information_schema.tables "
@@ -715,15 +733,33 @@ def check_db_size(cur) -> dict[str, Any]:
             "approx_rows": int(approx_rows or 0),
         })
 
+    dirs = sorted(p for root in (files._work_root(), files._archive_root())
+                  for p in (Path(root) / DATA_SUBDIR).iterdir() if p.is_dir())
+    sizes = dir_sizes(dirs)
+    # This run is logged only after the checks, so the last record is the previous run.
+    prev = last_jsonl_record_with("db_size")
+    prev_sizes = {d["path"]: d["bytes"] for d in (prev or {}).get("db_size", {}).get("details", {}).get("data_dirs", [])}
+    data_dirs = [
+        {"path": path, "bytes": size, "change_bytes": size - prev_sizes[path] if path in prev_sizes else None}
+        for path, size in sorted(sizes.items(), key=lambda kv: -kv[1])
+    ]
+    data_total = sum(sizes.values())
+
     return {
         "name": "db_size",
         "ok": True,
         "level": "ok",
-        "summary": f"database occupies {round(total_bytes / 1024 / 1024, 1)} MB",
+        "summary": (
+            f"database occupies {round(total_bytes / 1024 / 1024, 1)} MB; "
+            f"data folders {fmt_bytes(data_total)}"
+        ),
         "details": {
             "total_bytes": total_bytes,
             "total_mb": round(total_bytes / 1024 / 1024, 2),
             "per_table": per_table,
+            "data_total_bytes": data_total,
+            "data_dirs": data_dirs,
+            "data_compared_with": prev["timestamp"] if prev else None,
         },
     }
 
@@ -933,6 +969,18 @@ def render_html(mode: str, results: list[dict[str, Any]], deltas: dict[str, Any]
             continue
         parts.append(f"<h3>{name.replace('_', ' ').title()}</h3>")
         parts.append(f"<p style='color:{_LEVEL_COLOR[r['level']]}'>{r['summary']}</p>")
+        if name == "db_size" and r["details"].get("data_dirs"):
+            d = r["details"]
+            parts.append("<table cellpadding='4' style='border-collapse:collapse;font-size:12px'>"
+                         "<tr><th align='left'>data folder</th><th align='right'>size</th>"
+                         "<th align='right'>change</th></tr>")
+            for x in d["data_dirs"]:
+                change = "" if x["change_bytes"] is None else ("+" if x["change_bytes"] >= 0 else "") + fmt_bytes(x["change_bytes"])
+                parts.append(f"<tr><td>{x['path']}</td><td align='right'>{fmt_bytes(x['bytes'])}</td>"
+                             f"<td align='right' style='color:#777'>{change}</td></tr>")
+            parts.append("</table>")
+            if d.get("data_compared_with"):
+                parts.append(f"<p style='color:#777;font-size:12px'>compared with {d['data_compared_with']}</p>")
         if r["level"] != "ok" and r["details"].get("sample"):
             parts.append(
                 "<pre style='background:#f5f5f5;padding:8px;overflow-x:auto'>"
