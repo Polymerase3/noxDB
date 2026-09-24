@@ -244,13 +244,25 @@ File pointers registered for a sample. The database never stores file content â€
 | `file_id`         | `BIGINT UNSIGNED` PK AI                                                                 | NO       |                                                            |
 | `sample_id`       | `BIGINT UNSIGNED` FK                                                                    | NO       | â†’ `samples.sample_id` RESTRICT on delete                   |
 | `file_type`       | `ENUM('fastq_r1','fastq_r2','fastq_single','bam','counts','beer_norm','zigp_norm','edger_norm','zigp_loose')` | NO |                                                     |
-| `file_path`       | `VARCHAR(1024)`                                                                         | NO       | UNIQUE globally; must be absolute (enforced by CHECK `LIKE '/%'`) |
-| `file_size_bytes` | `BIGINT UNSIGNED`                                                                       | YES      |                                                            |
-| `checksum_md5`    | `CHAR(32)`                                                                              | YES      | Must match `^[a-f0-9]{32}$` when set                       |
+| `file_path`       | `VARCHAR(1024)`                                                                         | NO       | Must be absolute (enforced by CHECK `LIKE '/%'`); the `.tar` for a tar member |
+| `archive_member`  | `VARCHAR(512)`                                                                          | NO       | DEFAULT `''`; the file's name inside the tar at `file_path`, `''` for a plain file. UNIQUE together with `file_path` |
+| `archive_offset`  | `BIGINT UNSIGNED`                                                                       | YES      | Byte position of the member's data in the tar; only set with `archive_member` (CHECK) |
+| `file_size_bytes` | `BIGINT UNSIGNED`                                                                       | YES      | The member's size for a tar member                         |
+| `checksum_md5`    | `CHAR(32)`                                                                              | YES      | Must match `^[a-f0-9]{32}$` when set; the member's MD5 for a tar member |
 | `storage_tier`    | `ENUM('work','archive','scratch','external')`                                           | NO       | DEFAULT `'work'`; see [Storage tiers](#storage-tiers)      |
 | `created_at`      | `TIMESTAMP`                                                                             | NO       | DEFAULT `CURRENT_TIMESTAMP`                                |
 
 Deleting a sample that still has files is rejected (`ON DELETE RESTRICT`). Files must be deregistered first.
+
+**Files inside a tar** (migration `006_sample_files_archive_member`). The
+FASTQ files are kept in one tar per sequencing run under
+`<archive root>/ccr/mariaDB/fastq_tar/`. Each FASTQ is registered as its own
+row: `file_path` is the tar, `archive_member` the file's name inside it and
+`archive_offset` where its bytes start, so
+[`fetch.download_files_for_project`][noxdb.fetch.download_files_for_project]
+can read one file without scanning the whole tar and checks it against
+`checksum_md5`. Register such rows with
+`files.register(..., archive_member=..., archive_offset=..., file_size_bytes=..., checksum_md5=...)`.
 
 ---
 

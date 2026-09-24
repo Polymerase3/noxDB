@@ -23,6 +23,14 @@ Roots are configurable via env vars (defaults shown):
 Callers can override ``storage_tier`` to ``'scratch'`` or ``'external'``
 (escape hatches with no path-prefix check); overriding to swap
 ``archive``/``work`` against the type-derived value is rejected.
+
+Files inside a tar
+------------------
+A row can point at one member of a tar archive (schema 006): ``file_path``
+is the ``.tar``, ``archive_member`` the member's name inside it and
+``archive_offset`` the byte position of its data. Size and checksum then
+describe the member and must come from the caller, since the member cannot
+be stat'ed. Plain files have ``archive_member = ''``.
 """
 
 from __future__ import annotations
@@ -50,6 +58,8 @@ _COLUMNS = (
     "sample_id",
     "file_type",
     "file_path",
+    "archive_member",
+    "archive_offset",
     "file_size_bytes",
     "checksum_md5",
     "storage_tier",
@@ -179,6 +189,34 @@ def _resolve_tier(file_type: str, override: str | None) -> str:
     return override
 
 
+def _validate_member_args(
+    file_path: str,
+    archive_member: str,
+    archive_offset: int | None,
+    file_size_bytes: int | None,
+    compute_md5: bool,
+) -> None:
+    """Checks for the tar-member arguments of register()."""
+    if not archive_member:
+        if archive_offset is not None or file_size_bytes is not None:
+            raise ValueError(
+                "archive_offset and file_size_bytes are only accepted with archive_member"
+            )
+        return
+    if not file_path.lower().endswith(".tar"):
+        raise ValueError(
+            f"archive_member requires file_path to be a .tar, got {file_path!r}"
+        )
+    if compute_md5:
+        raise ValueError(
+            "compute_md5 cannot hash a tar member; pass checksum_md5=... instead"
+        )
+    if archive_offset is not None and archive_offset < 0:
+        raise ValueError(f"archive_offset must be >= 0, got {archive_offset!r}")
+    if file_size_bytes is not None and file_size_bytes < 0:
+        raise ValueError(f"file_size_bytes must be >= 0, got {file_size_bytes!r}")
+
+
 def _inspect_file(
     file_path: str,
     file_type: str,
@@ -187,12 +225,19 @@ def _inspect_file(
     checksum_md5: str | None,
     storage_tier: str | None,
     skip_disk_check: bool = False,
+    archive_member: str = "",
+    archive_offset: int | None = None,
+    file_size_bytes: int | None = None,
 ) -> dict[str, Any]:
     """Run all filesystem and policy checks. Returns the row to insert
     minus ``sample_id``. Raises before any SQL is touched.
 
     When ``skip_disk_check`` is ``True``, path-prefix and on-disk checks
     (stat, md5) are skipped; ``file_size_bytes`` is stored as ``None``.
+
+    With ``archive_member`` set, ``file_path`` is the tar: the disk checks
+    apply to the tar, the extension check to the member, and size and
+    checksum are taken from the caller.
     """
     if compute_md5 and checksum_md5 is not None:
         raise ValueError(
@@ -202,12 +247,15 @@ def _inspect_file(
         raise ValueError(
             f"Unknown file_type {file_type!r}; must be one of {sorted(_ALL_TYPES)}"
         )
-    _validate_extension(file_path, file_type)
+    _validate_member_args(
+        file_path, archive_member, archive_offset, file_size_bytes, compute_md5
+    )
+    _validate_extension(archive_member or file_path, file_type)
     tier = _resolve_tier(file_type, storage_tier)
     size: int | None
     md5: str | None
     if skip_disk_check:
-        size = None
+        size = file_size_bytes if archive_member else None
         md5 = checksum_md5
         if md5 is not None:
             _validate_md5(md5)
@@ -218,7 +266,7 @@ def _inspect_file(
             work_root=_work_root(),
         )
         st = _stat_regular_file(file_path)
-        size = int(st.st_size)
+        size = file_size_bytes if archive_member else int(st.st_size)
         if checksum_md5 is not None:
             _validate_md5(checksum_md5)
             md5 = checksum_md5
@@ -229,6 +277,8 @@ def _inspect_file(
     return {
         "file_type": file_type,
         "file_path": file_path,
+        "archive_member": archive_member,
+        "archive_offset": archive_offset,
         "file_size_bytes": size,
         "checksum_md5": md5,
         "storage_tier": tier,
@@ -253,6 +303,9 @@ def register(
     checksum_md5: str | None = None,
     storage_tier: str | None = None,
     skip_disk_check: bool = False,
+    archive_member: str = "",
+    archive_offset: int | None = None,
+    file_size_bytes: int | None = None,
 ) -> int:
     """Validate a file on disk and insert a `sample_files` row.
 
@@ -274,6 +327,13 @@ def register(
         storage_tier: Override the file-type-derived tier. Only
             ``'scratch'`` and ``'external'`` are accepted as overrides;
             flipping ``archive`` ↔ ``work`` is rejected.
+        skip_disk_check: Skip the path-prefix and on-disk checks.
+        archive_member: Name of the file inside the tar at
+            ``file_path``. Empty (default) for a plain file.
+        archive_offset: Byte position of the member's data in the tar.
+            Only with ``archive_member``.
+        file_size_bytes: The member's size. Only with ``archive_member``;
+            a plain file's size is read from disk.
 
     Returns:
         The newly inserted ``file_id``.
@@ -281,11 +341,14 @@ def register(
     Raises:
         ValueError: Relative path, unknown ``file_type``, mismatched
             extension or tier, malformed ``checksum_md5``, or both
-            ``compute_md5`` and ``checksum_md5`` set.
+            ``compute_md5`` and ``checksum_md5`` set. With
+            ``archive_member``: ``file_path`` not a ``.tar`` or
+            ``compute_md5`` set; without it: ``archive_offset`` or
+            ``file_size_bytes`` set.
         FileNotFoundError: If the path does not exist.
         IsADirectoryError: If the path is a directory.
         mariadb.IntegrityError: Unknown ``sample_id`` (FK violation) or
-            duplicate ``file_path`` (global UNIQUE).
+            duplicate (``file_path``, ``archive_member``) (global UNIQUE).
     """
     row = _inspect_file(
         file_path, file_type,
@@ -293,15 +356,21 @@ def register(
         checksum_md5=checksum_md5,
         storage_tier=storage_tier,
         skip_disk_check=skip_disk_check,
+        archive_member=archive_member,
+        archive_offset=archive_offset,
+        file_size_bytes=file_size_bytes,
     )
     cur.execute(
         "INSERT INTO sample_files "
-        "(sample_id, file_type, file_path, file_size_bytes, checksum_md5, "
-        "storage_tier) VALUES (?, ?, ?, ?, ?, ?)",
+        "(sample_id, file_type, file_path, archive_member, archive_offset, "
+        "file_size_bytes, checksum_md5, storage_tier) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             sample_id,
             row["file_type"],
             row["file_path"],
+            row["archive_member"],
+            row["archive_offset"],
             row["file_size_bytes"],
             row["checksum_md5"],
             row["storage_tier"],
@@ -320,10 +389,13 @@ def get_or_register(
     checksum_md5: str | None = None,
     storage_tier: str | None = None,
     skip_disk_check: bool = False,
+    archive_member: str = "",
+    archive_offset: int | None = None,
+    file_size_bytes: int | None = None,
 ) -> tuple[int, bool]:
     """Idempotently register a file. Returns ``(file_id, registered)``.
 
-    If a row with this ``file_path`` already exists, it is returned
+    If a row with this ``file_path`` and ``archive_member`` already exists, it is returned
     as-is — the file is NOT re-stat'd and the other arguments are not
     used to update the existing row. This means a stale path that was
     registered in the past keeps returning its id even if the file has
@@ -338,6 +410,11 @@ def get_or_register(
         compute_md5: Used only on insert.
         checksum_md5: Used only on insert.
         storage_tier: Used only on insert.
+        skip_disk_check: Used only on insert.
+        archive_member: Part of the lookup key; see
+            [`register`][noxdb.files.register].
+        archive_offset: Used only on insert.
+        file_size_bytes: Used only on insert.
 
     Returns:
         ``(file_id, registered)`` where ``registered`` is ``True`` iff
@@ -348,7 +425,7 @@ def get_or_register(
         Plus everything [`register`][noxdb.files.register] raises
         on insert.
     """
-    existing = get_by_path(cur, file_path)
+    existing = get_by_path(cur, file_path, archive_member)
     if existing is not None:
         return int(existing["file_id"]), False
     try:
@@ -358,9 +435,12 @@ def get_or_register(
             checksum_md5=checksum_md5,
             storage_tier=storage_tier,
             skip_disk_check=skip_disk_check,
+            archive_member=archive_member,
+            archive_offset=archive_offset,
+            file_size_bytes=file_size_bytes,
         )
     except mariadb.IntegrityError:
-        existing = get_by_path(cur, file_path)
+        existing = get_by_path(cur, file_path, archive_member)
         if existing is None:
             raise
         return int(existing["file_id"]), False
@@ -382,17 +462,23 @@ def get(cur, file_id: int) -> dict[str, Any] | None:
     return _row_to_dict(cur, row) if row is not None else None
 
 
-def get_by_path(cur, file_path: str) -> dict[str, Any] | None:
+def get_by_path(
+    cur, file_path: str, archive_member: str = ""
+) -> dict[str, Any] | None:
     """Return the file row for a given path.
 
     Args:
         cur: Audit-logging cursor from `transaction()`.
-        file_path: Absolute path on disk.
+        file_path: Absolute path on disk (the tar, for a tar member).
+        archive_member: Member name inside the tar; empty for a plain file.
 
     Returns:
         The row as ``dict[str, Any]``, or ``None`` if not found.
     """
-    cur.execute("SELECT * FROM sample_files WHERE file_path = ?", (file_path,))
+    cur.execute(
+        "SELECT * FROM sample_files WHERE file_path = ? AND archive_member = ?",
+        (file_path, archive_member),
+    )
     row = cur.fetchone()
     return _row_to_dict(cur, row) if row is not None else None
 
@@ -526,10 +612,16 @@ def restat(cur, file_id: int, *, compute_md5: bool = False) -> bool:
     Raises:
         FileNotFoundError: If the path no longer resolves. No SQL runs
             in that case.
+        ValueError: If the row is a tar member; the tar's size and
+            checksum are not the member's.
     """
     row = get(cur, file_id)
     if row is None:
         return False
+    if row["archive_member"]:
+        raise ValueError(
+            f"file_id {file_id} is a tar member; restat() only applies to plain files"
+        )
     st = _stat_regular_file(row["file_path"])
     new_size = int(st.st_size)
     new_md5 = _compute_md5(row["file_path"]) if compute_md5 else row["checksum_md5"]
@@ -562,6 +654,7 @@ def exists(
     file_id: int | None = None,
     *,
     path: str | None = None,
+    archive_member: str = "",
 ) -> bool:
     """Return whether a file with the given id or path exists.
 
@@ -569,6 +662,8 @@ def exists(
         cur: Audit-logging cursor from `transaction()`.
         file_id: Id to check (exclusive with ``path``).
         path: Path to check (exclusive with ``file_id``).
+        archive_member: With ``path``: the member inside the tar; empty
+            for a plain file.
 
     Returns:
         ``True`` if a matching row exists.
@@ -581,5 +676,8 @@ def exists(
     if file_id is not None:
         cur.execute("SELECT 1 FROM sample_files WHERE file_id = ?", (file_id,))
     else:
-        cur.execute("SELECT 1 FROM sample_files WHERE file_path = ?", (path,))
+        cur.execute(
+            "SELECT 1 FROM sample_files WHERE file_path = ? AND archive_member = ?",
+            (path, archive_member),
+        )
     return cur.fetchone() is not None

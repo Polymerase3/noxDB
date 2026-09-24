@@ -10,6 +10,27 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-24
+
+### Added
+- **Files inside a tar** (`schema/006_sample_files_archive_member.sql`).
+  `sample_files` gains `archive_member` (the file's name inside the tar at
+  `file_path`, `''` for plain files) and `archive_offset` (byte position of
+  its data). The unique key moves from `file_path` to
+  (`file_path`, `archive_member`). This lets every FASTQ in the per-run tars
+  under `ccr/mariaDB/fastq_tar/` be registered as its own row, with the
+  member's size and MD5. Run the migration on `ccr_metadata` before
+  registering any such row.
+- `files.register` / `get_or_register` take `archive_member`,
+  `archive_offset` and `file_size_bytes`; `get_by_path` and `exists` match
+  on the member too. `restat` refuses tar members.
+- `fetch.download_files_for_project` extracts a tar member on its own (read
+  at `archive_offset`, or found by name when the offset is unknown), locally
+  or over SFTP, and checks it against `checksum_md5`; a mismatch is reported
+  as failed and the partial copy removed.
+- `queries.files_for_project` and `find_db_files_missing_on_disk` return
+  `archive_member` and `archive_offset`.
+
 ## [0.11.0] - 2026-09-24
 
 ### Changed
