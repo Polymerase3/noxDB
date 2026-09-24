@@ -243,7 +243,7 @@ File pointers registered for a sample. The database never stores file content �
 |-------------------|-----------------------------------------------------------------------------------------|----------|------------------------------------------------------------|
 | `file_id`         | `BIGINT UNSIGNED` PK AI                                                                 | NO       |                                                            |
 | `sample_id`       | `BIGINT UNSIGNED` FK                                                                    | NO       | → `samples.sample_id` RESTRICT on delete                   |
-| `file_type`       | `ENUM('fastq_r1','fastq_r2','fastq_single','bam','counts','beer_norm','zigp_norm','edger_norm')` | NO |                                                     |
+| `file_type`       | `ENUM('fastq_r1','fastq_r2','fastq_single','bam','counts','beer_norm','zigp_norm','edger_norm','zigp_loose')` | NO |                                                     |
 | `file_path`       | `VARCHAR(1024)`                                                                         | NO       | UNIQUE globally; must be absolute (enforced by CHECK `LIKE '/%'`) |
 | `file_size_bytes` | `BIGINT UNSIGNED`                                                                       | YES      |                                                            |
 | `checksum_md5`    | `CHAR(32)`                                                                              | YES      | Must match `^[a-f0-9]{32}$` when set                       |
@@ -320,7 +320,7 @@ or [`queries.project_tidy_table`][noxdb.queries.project_tidy_table].
 | `file_type`                          | Required tier         | Root env var          | Default         |
 |--------------------------------------|-----------------------|-----------------------|-----------------|
 | `fastq_r1`, `fastq_r2`, `fastq_single`, `bam` | `archive` | `NOXDB_ARCHIVE_ROOT`  | `/lisc/archive` |
-| `counts`, `beer_norm`, `zigp_norm`, `edger_norm` | `work`  | `NOXDB_WORK_ROOT`     | `/lisc/work`    |
+| `counts`, `beer_norm`, `zigp_norm`, `edger_norm`, `zigp_loose` | `work`  | `NOXDB_WORK_ROOT`     | `/lisc/work`    |
 | anything                             | `scratch`, `external` | —                     | —               |
 
 Flipping `archive` ↔ `work` on an existing row is rejected by
