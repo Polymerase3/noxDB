@@ -59,6 +59,7 @@ def populated_project(_init_pool):
         other_smp = samples.create(
             cur, other_vid, "OTHER_S1", "sample", "X", "X", "libX",
             antibody_class="IgG",
+            ipr="01", iprp="01",
         )
         samples.link_to_project(cur, other_pid, other_smp)
 
@@ -78,12 +79,12 @@ def populated_project(_init_pool):
         metadata.set_visit(cur, vb_b, "smoker", True)
 
         a1 = samples.create(cur, va_b, "SAMP_A1", "sample", "Q1", "Q1", "libA",
-                            antibody_class="IgG")
-        a2 = samples.create(cur, va_b, "SAMP_A2", "input",  "Q1", "Q1", "libA")
+                            antibody_class="IgG", ipr="01", iprp="01")
+        a2 = samples.create(cur, va_b, "SAMP_A2", "input",  "Q1", "Q1", "libA", ipr="01", iprp="01")
         a3 = samples.create(cur, va_m3, "SAMP_A3", "sample", "Q2", "Q2", "libA",
-                            antibody_class="IgM")
+                            antibody_class="IgM", ipr="01", iprp="01")
         b1 = samples.create(cur, vb_b, "SAMP_B1", "sample", "Q3", "Q3", "libB",
-                            antibody_class="IgG")
+                            antibody_class="IgG", ipr="01", iprp="01")
 
         for _smp in (a1, a2, a3, b1):
             samples.link_to_project(cur, pid, _smp)
@@ -346,7 +347,7 @@ def test_samples_with_metadata_collision_prefixed_visit(_init_pool):
         pid = projects.create(cur, "CPROJ")
         sa = subjects.create(cur, "S", "F")
         vid = visits.create(cur, sa, "ctrl", 20, timepoint="t")
-        sid = samples.create(cur, vid, "SS", "sample", "X", "X", "libX")
+        sid = samples.create(cur, vid, "SS", "sample", "X", "X", "libX", ipr="01", iprp="01")
         samples.link_to_project(cur, pid, sid)
         metadata.set_visit(cur, vid, "shared", "from_visit")
         metadata.set_sample(cur, sid, "shared", "from_sample")

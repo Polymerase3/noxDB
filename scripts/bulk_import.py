@@ -13,7 +13,8 @@ Master CSV layout
   visits.csv          project_name, subject_code, timepoint, group_test, age,
                       [meta_*]
   samples.csv         project_name, sample_name, subject_code, timepoint,
-                      sample_type, sqr, sqrp, library, [antibody_class], [meta_*]
+                      sample_type, ipr, iprp, sqr, sqrp, library,
+                      [antibody_class], [meta_*]
   files/manifest.csv  project_name, sample_name, file_path, file_type,
                       [storage_tier], [checksum_md5]   (optional file)
 
@@ -174,7 +175,7 @@ def _read_samples(path: Path) -> dict[str, list[SampleRow]]:
         _require_cols(
             header,
             ("project_name", "sample_name", "subject_code", "timepoint",
-             "sample_type", "sqr", "sqrp", "library"),
+             "sample_type", "ipr", "iprp", "sqr", "sqrp", "library"),
             path,
         )
         mkeys = _meta_keys(header)
@@ -188,6 +189,8 @@ def _read_samples(path: Path) -> dict[str, list[SampleRow]]:
                 subject_code=row["subject_code"].strip(),
                 timepoint=row["timepoint"].strip(),
                 sample_type=row["sample_type"].strip(),
+                ipr=row["ipr"].strip(),
+                iprp=row["iprp"].strip(),
                 sqr=row["sqr"].strip(),
                 sqrp=row["sqrp"].strip(),
                 library=row["library"].strip(),

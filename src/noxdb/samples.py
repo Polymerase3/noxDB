@@ -12,10 +12,12 @@ Two independent coordinate systems live on this table and must not be
 confused — they were, until ``004_ip_and_sequencing_coords``:
 
 ``IPR`` / ``IPRP``
-    Immunoprecipitation run and plate. This is the ``RxxPxx`` in the
-    sample name, and the grain of the files on disk. Derived from the
-    name on insert, never passed in. Plate-based control linking keys
-    on this pair, because controls occupy wells 81-96 of the IP plate.
+    Immunoprecipitation run and plate, from columns N (``IP run #``)
+    and O (``Plate #``) of the lab's "Overview of IP runs" sheet. The
+    ``RxxPxx`` in the sample name is *not* a reliable source: plates were
+    relabelled on some files, so the name is never read for this.
+    Plate-based control linking keys on this pair, because controls
+    occupy wells 81-96 of the IP plate.
 
 ``SQR`` / ``SQRP``
     Sequencing run and its plate, from the run sheet. Unrelated to the
@@ -24,7 +26,6 @@ confused — they were, until ``004_ip_and_sequencing_coords``:
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import mariadb
@@ -89,46 +90,6 @@ def canonical_plate_id(value: str | None) -> str:
     return s.zfill(2) if s.isdigit() else s
 
 
-# IP coordinates live in the sample name: 'R42P02_09_..' is IP run 42
-# plate 02, 'R31_input1_01_..' is IP run 31 with no plate.
-_NAME_PLATE_RE = re.compile(r"^R(\d+)P(\d+)_")
-_NAME_RUN_RE = re.compile(r"^R(\d+)_")
-
-
-def ip_coords_from_name(sample_name: str | None) -> tuple[str, str] | None:
-    """Read the ``(IPR, IPRP)`` IP coordinates out of a sample name.
-
-    The name is the authoritative IP-plate identity on this deployment:
-    it matches the physical 96-file plates on disk, and the files
-    themselves are named for nothing else. Both halves come back
-    canonicalized, so the result can be compared byte-for-byte with a
-    stored value.
-
-    This reads the *immunoprecipitation* run and plate. It says nothing
-    about where the sample was sequenced — ``R14P02_77_..`` is IP plate
-    R14P02 but sequencing run 07, plate 02. Reading the name for
-    sequencing coordinates is what put IP values in ``SQR``/``SQRP`` in
-    0.7.3; those come from the run sheet and from nowhere else.
-
-    Args:
-        sample_name: Full sample name, e.g.
-            ``"R42P02_09_PIC20_T1_A_T_C2"``.
-
-    Returns:
-        ``(ipr, iprp)`` for a run+plate name, ``(ipr, "")`` for a
-        run-only name such as an input, or ``None`` when the name
-        carries no coordinates at all — the caller decides whether that
-        is a warning or a failure.
-    """
-    m = _NAME_PLATE_RE.match(sample_name or "")
-    if m:
-        return canonical_plate_id(m.group(1)), canonical_plate_id(m.group(2))
-    m = _NAME_RUN_RE.match(sample_name or "")
-    if m:
-        return canonical_plate_id(m.group(1)), ""
-    return None
-
-
 def create(
     cur,
     visit_id: int,
@@ -138,17 +99,11 @@ def create(
     sqrp: str,
     library: str,
     *,
+    ipr: str,
+    iprp: str,
     antibody_class: str | None = None,
 ) -> int:
     """Insert a sample and return its new ``sample_id``.
-
-    ``IPR``/``IPRP`` are not parameters: they are read from
-    *sample_name* via
-    [`ip_coords_from_name`][noxdb.samples.ip_coords_from_name]. The
-    name is the authoritative IP identity, so deriving here means no
-    caller can store a pair that contradicts it. A name carrying no
-    coordinates stores two empty strings, matching how a run-only name
-    already stores an empty plate.
 
     Args:
         cur: Audit-logging cursor from `transaction()`.
@@ -162,6 +117,11 @@ def create(
         sqrp: Sequencing plate within that run. Canonicalized like
             ``sqr``.
         library: Library identifier.
+        ipr: IP run, from the IP-runs overview sheet. Canonicalized via
+            [`canonical_plate_id`][noxdb.samples.canonical_plate_id]
+            before storage.
+        iprp: IP plate within that run, ``""`` for a run-only sample
+            such as an input. Canonicalized like ``ipr``.
         antibody_class: Optional antibody class label.
 
     Returns:
@@ -173,7 +133,6 @@ def create(
             existing visit, or ``sample_type`` is outside the allowed
             enum.
     """
-    ipr, iprp = ip_coords_from_name(sample_name) or ("", "")
     cur.execute(
         "INSERT INTO samples "
         "(visit_id, sample_name, sample_type, IPR, IPRP, SQR, SQRP, "
@@ -181,7 +140,7 @@ def create(
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             visit_id, sample_name, sample_type,
-            ipr, iprp,
+            canonical_plate_id(ipr), canonical_plate_id(iprp),
             canonical_plate_id(sqr), canonical_plate_id(sqrp),
             library, antibody_class,
         ),
@@ -228,6 +187,8 @@ def get_or_create(
     sqrp: str,
     library: str,
     *,
+    ipr: str,
+    iprp: str,
     antibody_class: str | None = None,
 ) -> tuple[int, bool]:
     """Idempotently return the sample id, inserting if needed.
@@ -245,6 +206,8 @@ def get_or_create(
         sqr: Sequencing run. Used only on insert.
         sqrp: Sequencing plate. Used only on insert.
         library: Used only on insert.
+        ipr: IP run. Used only on insert.
+        iprp: IP plate. Used only on insert.
         antibody_class: Used only on insert.
 
     Returns:
@@ -266,6 +229,8 @@ def get_or_create(
             sqr,
             sqrp,
             library,
+            ipr=ipr,
+            iprp=iprp,
             antibody_class=antibody_class,
         )
         return new_id, True
@@ -371,8 +336,6 @@ def update(
             [`create`][noxdb.samples.create] for allowed values.
         ipr: New IP run (if not None). Canonicalized via
             [`canonical_plate_id`][noxdb.samples.canonical_plate_id].
-            [`create`][noxdb.samples.create] derives this from the
-            name; it is settable here only to correct a stored row.
         iprp: New IP plate (if not None). Canonicalized like ``ipr``.
         sqr: New sequencing run (if not None). Canonicalized like
             ``ipr``.

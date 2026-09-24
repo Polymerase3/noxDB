@@ -189,7 +189,8 @@ with transaction() as cur:
 | 7          | 14926      | R14P02_81_Mock_1_A_T_C2            | 15838    | baseline  | 15838     | R14P02_81_Mock_1_A_T_C2            | mockIP      | 14  | 02   | 07  | 02   | A_T_C2  | None           |
 | …          | …          | …                                  | …        | …         | …         | …                                  | …           | …   | …    | …   | …    | …       | …              |
 
-`IPR`/`IPRP` are the immunoprecipitation plate, read from the sample
+`IPR`/`IPRP` are the immunoprecipitation plate, from the "Overview of
+IP runs" sheet; on some plates they differ from the `RxxPxx` in the
 name. `SQR`/`SQRP` are the sequencing plate, which comes from the run
 sheet. They are different numbers for the same row, and the second row
 above shows a third pairing again. See

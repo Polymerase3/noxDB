@@ -57,8 +57,8 @@ def project_with_local_files(_init_pool, tmp_path):
         sa = subjects.create(cur, "S_A", "F", origin="PL")
         va = visits.create(cur, sa, "ctrl", 30, timepoint="baseline")
         a1 = samples.create(cur, va, "S_A1", "sample", "Q", "Q", "libA",
-                            antibody_class="IgG")
-        b1 = samples.create(cur, va, "S_B1", "sample", "Q", "Q", "libA")
+                            antibody_class="IgG", ipr="01", iprp="01")
+        b1 = samples.create(cur, va, "S_B1", "sample", "Q", "Q", "libA", ipr="01", iprp="01")
         samples.link_to_project(cur, pid, a1)
         samples.link_to_project(cur, pid, b1)
 

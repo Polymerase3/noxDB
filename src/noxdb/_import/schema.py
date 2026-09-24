@@ -27,7 +27,7 @@ VISITS_OPTIONAL: tuple[str, ...] = ()
 
 SAMPLES_REQUIRED = (
     "sample_name", "subject_code", "timepoint",
-    "sample_type", "sqr", "sqrp", "library",
+    "sample_type", "ipr", "iprp", "sqr", "sqrp", "library",
 )
 SAMPLES_OPTIONAL = ("antibody_class",)
 
@@ -115,15 +115,12 @@ def coerce_int(raw: str, *, field: str) -> int:
 
 
 def validate_plate_id(raw: str | None, *, field: str) -> tuple[str, str | None]:
-    """Validate + canonicalize a sequencing coordinate cell for import.
+    """Validate + canonicalize an IP or sequencing coordinate cell for import.
 
     Uses the same canonicalization as
     [`samples.create`][noxdb.samples.create], so what the importer
     accepts here is byte-identical to what gets stored and coordinate
     matching can't drift between the two.
-
-    The IP coordinates are not validated here: they are never read
-    from a CSV, only derived from the sample name.
 
     Args:
         raw: The raw cell value.
