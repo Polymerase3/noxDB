@@ -46,47 +46,54 @@ pi_name: "Dr. Jane Doe"
 
 ## subjects.csv
 
-One row per **study subject** (patient or healthy control). Controls
-(mocks, anchors, NCs) go in `samples.csv` — do not add them here.
+One row per **subject**: every patient or healthy control, and every plate
+control (mock, anchor, NC) on the plate. A plate control uses its own
+`sample_name` as `subject_code` and leaves `sex` and `origin` empty.
 
 ```
-subject_code,sex,origin,meta_diagnosis,meta_IBD_score
-IBD_VIE_001,F,Austria,UC,8
-IBD_VIE_002,M,Austria,HC,
-IBD_VIE_003,F,Germany,CD,5
-IBD_VIE_004,M,Austria,UC,12
+subject_code,sex,origin
+IBD_VIE_001,F,Austria
+IBD_VIE_002,M,Austria
+IBD_VIE_003,F,Germany
+IBD_VIE_004,M,Austria
+R25P01_81_Mock_1_A_T_C2,,
 ```
 
 | Column | Required | Allowed values | Notes |
 |--------|----------|---------------|-------|
 | `subject_code` | **yes** | any string | Must be unique globally. Use a stable code you'll recognise later. |
-| `sex` | **yes** | `M`, `F` | Leave empty only if genuinely unknown — do not write `NA`. |
+| `sex` | **yes** | `M`, `F` | Leave empty if genuinely unknown, and for plate controls — do not write `NA`. |
 | `origin` | no | free text | Country or region. |
-| `meta_*` | no | any | See [metadata columns](#metadata-columns) below. |
+
+`subjects.csv` takes **no `meta_*` columns**: noxDB has no subject-level
+metadata. Put such fields (a diagnosis, a score) in `visits.csv`; an
+import with `meta_*` columns in `subjects.csv` is refused.
 
 ---
 
 ## visits.csv
 
 One row per **visit** (timepoint). Most projects have one visit per subject
-(`baseline`). Multi-timepoint projects add one row per visit.
+(`baseline`). Multi-timepoint projects add one row per visit. Each plate
+control gets one visit: timepoint `baseline`, group `control`, no age.
 
 ```
-subject_code,timepoint,group_test,age,meta_treatment
-IBD_VIE_001,baseline,UC,34,infliximab
-IBD_VIE_001,week12,UC,34,infliximab
-IBD_VIE_002,baseline,HC,29,
-IBD_VIE_003,baseline,CD,52,vedolizumab
-IBD_VIE_004,baseline,UC,41,
+subject_code,timepoint,group_test,age,meta_treatment,meta_IBD_score
+IBD_VIE_001,baseline,UC,34,infliximab,8
+IBD_VIE_001,week12,UC,34,infliximab,6
+IBD_VIE_002,baseline,HC,29,,
+IBD_VIE_003,baseline,CD,52,vedolizumab,5
+IBD_VIE_004,baseline,UC,41,,12
+R25P01_81_Mock_1_A_T_C2,baseline,control,,,
 ```
 
 | Column | Required | Notes |
 |--------|----------|-------|
 | `subject_code` | **yes** | Must match a code in `subjects.csv`. |
-| `timepoint` | **yes** | Free text label: `baseline`, `week12`, `follow_up`, etc. |
-| `group_test` | **yes** | Clinical group: `UC`, `CD`, `HC`, `patient`, `control`, etc. |
-| `age` | **yes** | Integer. Leave empty if unknown (not `NA`). |
-| `meta_*` | no | Visit-level metadata such as treatment, score, BMI. |
+| `timepoint` | **yes** | Free text label: `baseline`, `week12`, `follow_up`, etc. `baseline` for plate controls. |
+| `group_test` | **yes** | Clinical group: `UC`, `CD`, `HC`, `patient`, etc. `control` for plate controls. |
+| `age` | **yes** | Integer. Leave empty if unknown, and for plate controls (not `NA`). |
+| `meta_*` | no | Metadata such as treatment, score, BMI, including subject-level facts like a diagnosis. |
 
 ---
 
@@ -97,22 +104,25 @@ samples **and** all plate controls (mockIP, anchor, NC) that appear on the
 same plate. Input samples go here too if you have them.
 
 ```
-sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library,antibody_class,meta_batch
-R25P01_01_IBD001_IBD_VIE_A_T_C2,IBD_VIE_001,baseline,sample,12,03,A_T_C2,,1
-R25P01_02_IBD002_IBD_VIE_A_T_C2,IBD_VIE_001,week12,sample,12,03,A_T_C2,,1
-R25P01_03_IBD003_IBD_VIE_A_T_C2,IBD_VIE_002,baseline,sample,12,03,A_T_C2,,1
-R25P01_04_IBD004_IBD_VIE_A_T_C2,IBD_VIE_003,baseline,sample,12,03,A_T_C2,,1
-R25P01_81_Mock_1_A_T_C2,R25P01_81_Mock_1_A_T_C2,baseline,mockIP,12,03,A_T_C2,,
-R25P01_82_Mock_2_A_T_C2,R25P01_82_Mock_2_A_T_C2,baseline,mockIP,12,03,A_T_C2,,
-R25P01_85_Anchor_1_A_T_C2,R25P01_85_Anchor_1_A_T_C2,baseline,anchor,12,03,A_T_C2,,
-R25P01_89_NC_1_A_T_C2,R25P01_89_NC_1_A_T_C2,baseline,NC,12,03,A_T_C2,,
+sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library,antibody_class,meta_batch
+R25P01_01_IBD001_IBD_VIE_A_T_C2,IBD_VIE_001,baseline,sample,25,01,12,03,A_T_C2,,1
+R25P01_02_IBD002_IBD_VIE_A_T_C2,IBD_VIE_001,week12,sample,25,01,12,03,A_T_C2,,1
+R25P01_03_IBD003_IBD_VIE_A_T_C2,IBD_VIE_002,baseline,sample,25,01,12,03,A_T_C2,,1
+R25P01_04_IBD004_IBD_VIE_A_T_C2,IBD_VIE_003,baseline,sample,25,01,12,03,A_T_C2,,1
+R25P01_81_Mock_1_A_T_C2,R25P01_81_Mock_1_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,,
+R25P01_82_Mock_2_A_T_C2,R25P01_82_Mock_2_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,,
+R25P01_85_Anchor_1_A_T_C2,R25P01_85_Anchor_1_A_T_C2,baseline,anchor,25,01,12,03,A_T_C2,,
+R25P01_87_NC_1_A_T_C2,R25P01_87_NC_1_A_T_C2,baseline,NC,25,01,12,03,A_T_C2,,
 ```
+
+(The four controls shown are a subset; a plate carries all 16, see
+[sample naming convention](#sample-naming-convention).)
 
 | Column | Required | Allowed values | Notes |
 |--------|----------|---------------|-------|
 | `sample_name` | **yes** | any string | Must be **globally unique**. Use the full name from the sequencing output — do not shorten it. |
-| `subject_code` | **yes** | — | Must match `subjects.csv` for real samples. For controls, repeat the `sample_name` in this column (controls have no subject). |
-| `timepoint` | **yes** | — | Must match `visits.csv` for real samples. Use `baseline` for controls. |
+| `subject_code` | **yes** | — | Must match `subjects.csv`. For a plate control this is its own `sample_name`. |
+| `timepoint` | **yes** | — | Must match `visits.csv`. `baseline` for plate controls. |
 | `sample_type` | **yes** | `sample` `mockIP` `anchor` `NC` `input` | See table below. |
 | `ipr` | **yes** | integer string | **IP** run: column N (`IP run #`) of the "Overview of IP runs" sheet. Not the `Rxx` in the sample name — see below. |
 | `iprp` | **yes** | integer string | **IP** plate: column O (`Plate #`) of the same sheet. Empty for input samples. |
@@ -164,14 +174,29 @@ For example: `R25P01_03_IBD003_IBD_VIE_A_T_C2`
 - `IBD_VIE` — project code
 - `A_T_C2` — library
 
-Controls follow the same run/plate prefix but use reserved positions and
-names such as `Mock_1`, `Mock_2`, `Anchor_1`, `NC_1`:
+Well positions count down each column of the 96-well plate: A1 is `01`,
+B1 is `02`, … H1 is `08`, A2 is `09`. Study samples fill columns 1–10
+(wells `01`–`80`).
+
+Controls follow the same run/plate prefix and always occupy columns 11
+and 12 (wells `81`–`96`), in this fixed layout:
+
+| Wells | Controls | `sample_type` |
+|-------|----------|---------------|
+| 81–84 | `Mock_1` – `Mock_4` | `mockIP` |
+| 85–86 | `Anchor_1` – `Anchor_2` | `anchor` |
+| 87–88 | `NC_1` – `NC_2` | `NC` |
+| 89–92 | `Mock_5` – `Mock_8` | `mockIP` |
+| 93–94 | `Anchor_3` – `Anchor_4` | `anchor` |
+| 95–96 | `NC_3` – `NC_4` | `NC` |
+
+For example:
 
 ```
 R25P01_81_Mock_1_A_T_C2
-R25P01_82_Mock_2_A_T_C2
 R25P01_85_Anchor_1_A_T_C2
-R25P01_89_NC_1_A_T_C2
+R25P01_87_NC_1_A_T_C2
+R25P01_89_Mock_5_A_T_C2
 ```
 
 ---
@@ -229,8 +254,10 @@ integer, decimals → float, everything else → text. **Empty cells are
 silently skipped** — they do not insert a NULL; they simply produce no
 metadata entry for that row.
 
-- Metadata on `visits.csv` is stored per visit (time-varying values: scores, treatment).
+- Metadata on `visits.csv` is stored per visit (time-varying values: scores,
+  treatment), and so are subject-level facts such as a diagnosis.
 - Metadata on `samples.csv` is stored per sample (technical values: batch, plate position).
+- `subjects.csv` takes no `meta_*` columns; the import is refused if it has any.
 - You can have any number of `meta_*` columns. Unknown non-`meta_` columns
   are ignored with a warning, so check the import log.
 
@@ -267,11 +294,27 @@ pi_name: "Dr. Jane Doe"
 **`subjects.csv`**
 
 ```
-subject_code,sex,origin,meta_diagnosis
-IBD_VIE_001,F,Austria,UC
-IBD_VIE_002,M,Austria,HC
-IBD_VIE_003,F,Germany,CD
-IBD_VIE_004,M,Austria,UC
+subject_code,sex,origin
+IBD_VIE_001,F,Austria
+IBD_VIE_002,M,Austria
+IBD_VIE_003,F,Germany
+IBD_VIE_004,M,Austria
+R25P01_81_Mock_1_A_T_C2,,
+R25P01_82_Mock_2_A_T_C2,,
+R25P01_83_Mock_3_A_T_C2,,
+R25P01_84_Mock_4_A_T_C2,,
+R25P01_85_Anchor_1_A_T_C2,,
+R25P01_86_Anchor_2_A_T_C2,,
+R25P01_87_NC_1_A_T_C2,,
+R25P01_88_NC_2_A_T_C2,,
+R25P01_89_Mock_5_A_T_C2,,
+R25P01_90_Mock_6_A_T_C2,,
+R25P01_91_Mock_7_A_T_C2,,
+R25P01_92_Mock_8_A_T_C2,,
+R25P01_93_Anchor_3_A_T_C2,,
+R25P01_94_Anchor_4_A_T_C2,,
+R25P01_95_NC_3_A_T_C2,,
+R25P01_96_NC_4_A_T_C2,,
 ```
 
 **`visits.csv`**
@@ -283,25 +326,49 @@ IBD_VIE_001,week12,UC,34,infliximab,3.1
 IBD_VIE_002,baseline,HC,29,,0.8
 IBD_VIE_003,baseline,CD,52,vedolizumab,11.2
 IBD_VIE_004,baseline,UC,41,,24.7
+R25P01_81_Mock_1_A_T_C2,baseline,control,,,
+R25P01_82_Mock_2_A_T_C2,baseline,control,,,
+R25P01_83_Mock_3_A_T_C2,baseline,control,,,
+R25P01_84_Mock_4_A_T_C2,baseline,control,,,
+R25P01_85_Anchor_1_A_T_C2,baseline,control,,,
+R25P01_86_Anchor_2_A_T_C2,baseline,control,,,
+R25P01_87_NC_1_A_T_C2,baseline,control,,,
+R25P01_88_NC_2_A_T_C2,baseline,control,,,
+R25P01_89_Mock_5_A_T_C2,baseline,control,,,
+R25P01_90_Mock_6_A_T_C2,baseline,control,,,
+R25P01_91_Mock_7_A_T_C2,baseline,control,,,
+R25P01_92_Mock_8_A_T_C2,baseline,control,,,
+R25P01_93_Anchor_3_A_T_C2,baseline,control,,,
+R25P01_94_Anchor_4_A_T_C2,baseline,control,,,
+R25P01_95_NC_3_A_T_C2,baseline,control,,,
+R25P01_96_NC_4_A_T_C2,baseline,control,,,
 ```
 
 **`samples.csv`**
 
 ```
-sample_name,subject_code,timepoint,sample_type,sqr,sqrp,library,antibody_class
-R25P01_01_IBD001_IBD_VIE_A_T_C2,IBD_VIE_001,baseline,sample,12,03,A_T_C2,
-R25P01_02_IBD002_IBD_VIE_A_T_C2,IBD_VIE_001,week12,sample,12,03,A_T_C2,
-R25P01_03_IBD003_IBD_VIE_A_T_C2,IBD_VIE_002,baseline,sample,12,03,A_T_C2,
-R25P01_04_IBD004_IBD_VIE_A_T_C2,IBD_VIE_003,baseline,sample,12,03,A_T_C2,
-R25P01_05_IBD005_IBD_VIE_A_T_C2,IBD_VIE_004,baseline,sample,12,03,A_T_C2,
-R25P01_81_Mock_1_A_T_C2,R25P01_81_Mock_1_A_T_C2,baseline,mockIP,12,03,A_T_C2,
-R25P01_82_Mock_2_A_T_C2,R25P01_82_Mock_2_A_T_C2,baseline,mockIP,12,03,A_T_C2,
-R25P01_83_Mock_3_A_T_C2,R25P01_83_Mock_3_A_T_C2,baseline,mockIP,12,03,A_T_C2,
-R25P01_84_Mock_4_A_T_C2,R25P01_84_Mock_4_A_T_C2,baseline,mockIP,12,03,A_T_C2,
-R25P01_85_Anchor_1_A_T_C2,R25P01_85_Anchor_1_A_T_C2,baseline,anchor,12,03,A_T_C2,
-R25P01_86_Anchor_2_A_T_C2,R25P01_86_Anchor_2_A_T_C2,baseline,anchor,12,03,A_T_C2,
-R25P01_89_NC_1_A_T_C2,R25P01_89_NC_1_A_T_C2,baseline,NC,12,03,A_T_C2,
-R25P01_90_NC_2_A_T_C2,R25P01_90_NC_2_A_T_C2,baseline,NC,12,03,A_T_C2,
+sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library,antibody_class
+R25P01_01_IBD001_IBD_VIE_A_T_C2,IBD_VIE_001,baseline,sample,25,01,12,03,A_T_C2,
+R25P01_02_IBD002_IBD_VIE_A_T_C2,IBD_VIE_001,week12,sample,25,01,12,03,A_T_C2,
+R25P01_03_IBD003_IBD_VIE_A_T_C2,IBD_VIE_002,baseline,sample,25,01,12,03,A_T_C2,
+R25P01_04_IBD004_IBD_VIE_A_T_C2,IBD_VIE_003,baseline,sample,25,01,12,03,A_T_C2,
+R25P01_05_IBD005_IBD_VIE_A_T_C2,IBD_VIE_004,baseline,sample,25,01,12,03,A_T_C2,
+R25P01_81_Mock_1_A_T_C2,R25P01_81_Mock_1_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,
+R25P01_82_Mock_2_A_T_C2,R25P01_82_Mock_2_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,
+R25P01_83_Mock_3_A_T_C2,R25P01_83_Mock_3_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,
+R25P01_84_Mock_4_A_T_C2,R25P01_84_Mock_4_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,
+R25P01_85_Anchor_1_A_T_C2,R25P01_85_Anchor_1_A_T_C2,baseline,anchor,25,01,12,03,A_T_C2,
+R25P01_86_Anchor_2_A_T_C2,R25P01_86_Anchor_2_A_T_C2,baseline,anchor,25,01,12,03,A_T_C2,
+R25P01_87_NC_1_A_T_C2,R25P01_87_NC_1_A_T_C2,baseline,NC,25,01,12,03,A_T_C2,
+R25P01_88_NC_2_A_T_C2,R25P01_88_NC_2_A_T_C2,baseline,NC,25,01,12,03,A_T_C2,
+R25P01_89_Mock_5_A_T_C2,R25P01_89_Mock_5_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,
+R25P01_90_Mock_6_A_T_C2,R25P01_90_Mock_6_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,
+R25P01_91_Mock_7_A_T_C2,R25P01_91_Mock_7_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,
+R25P01_92_Mock_8_A_T_C2,R25P01_92_Mock_8_A_T_C2,baseline,mockIP,25,01,12,03,A_T_C2,
+R25P01_93_Anchor_3_A_T_C2,R25P01_93_Anchor_3_A_T_C2,baseline,anchor,25,01,12,03,A_T_C2,
+R25P01_94_Anchor_4_A_T_C2,R25P01_94_Anchor_4_A_T_C2,baseline,anchor,25,01,12,03,A_T_C2,
+R25P01_95_NC_3_A_T_C2,R25P01_95_NC_3_A_T_C2,baseline,NC,25,01,12,03,A_T_C2,
+R25P01_96_NC_4_A_T_C2,R25P01_96_NC_4_A_T_C2,baseline,NC,25,01,12,03,A_T_C2,
 ```
 
 **`files/manifest.csv`** *(optional)*

@@ -10,6 +10,44 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-26
+
+### Added
+- **`validate_bundle`** (`noxdb._import`) runs every import check without
+  writing and returns a `ValidationResult` (`errors`, `warnings`). Without a
+  cursor it needs no database, which suits a submission form; with one it
+  also checks the bundle against what is stored. `load_project_dir` and the
+  row dataclasses are exported too, so a bundle can be built in memory.
+  `import_project_from_dir` and `scripts/bulk_import.py` both use it, so the
+  bulk import now also reports the plate-id normalization warnings it
+  skipped, and prints its warnings instead of only logging them.
+- **Additions to an existing project are checked against the database
+  before anything is written.** The import reuses stored subjects, visits
+  and samples as they are, so a bundle value that differs from the stored
+  one (a sex or origin, a visit's group or age, a sample's visit, type,
+  IPR/IPRP/SQR/SQRP, library or antibody class) is now an error. Before,
+  it was dropped without a word, or, for a subject, failed halfway through
+  the commit. A value for a field the database has empty is a warning (the
+  import does not fill it in), and so is metadata the import will overwrite.
+
+### Changed
+- **`meta_*` columns in `subjects.csv` are refused**, in the folder and the
+  bulk format. There is no subject-level metadata, and these columns used
+  to be dropped silently. Put such fields in `visits.csv`.
+- The "project already exists" error now reads "pass force=True (--force on
+  the command line) to add to it" in both importers.
+
+### Fixed
+- `docs/data-preparation.md`:
+  - The control wells follow the real plate layout: 81–84 Mock_1–4, 85–86
+    Anchor_1–2, 87–88 NC_1–2, 89–92 Mock_5–8, 93–94 Anchor_3–4, 95–96
+    NC_3–4. Well numbers count down each column.
+  - The `samples.csv` examples have the required `ipr` / `iprp` columns.
+  - Plate controls get their own `subjects.csv` and `visits.csv` rows, as
+    the importer has always required. The page said to leave them out.
+  - A test now imports the page's complete example, so the two can't drift
+    apart again.
+
 ## [0.12.1] - 2026-09-26
 
 ### Changed

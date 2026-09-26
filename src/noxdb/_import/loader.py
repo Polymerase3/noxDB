@@ -183,11 +183,11 @@ def _warn_extras(extras: list[str], filename: str) -> list[str]:
 def _load_subjects(path: Path) -> tuple[list[SubjectRow], list[str]]:
     reader, fh = _open_csv(path)
     try:
-        _check_required(list(reader.fieldnames or []), schema.SUBJECTS_REQUIRED, path)
+        header = list(reader.fieldnames or [])
+        _check_required(header, schema.SUBJECTS_REQUIRED, path)
+        schema.check_no_subject_metadata(header, path.name)
         extras, _ = schema.split_columns(
-            list(reader.fieldnames or []),
-            schema.SUBJECTS_REQUIRED,
-            schema.SUBJECTS_OPTIONAL,
+            header, schema.SUBJECTS_REQUIRED, schema.SUBJECTS_OPTIONAL,
         )
         rows: list[SubjectRow] = []
         for i, r in enumerate(reader, start=2):
