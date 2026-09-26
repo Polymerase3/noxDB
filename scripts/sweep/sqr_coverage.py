@@ -97,7 +97,7 @@ def compute_coverage(master: Iterable[Dict[str, str]], db: Dict[str, List[str]])
     """Pure computation, separated from I/O for testing."""
     by_norm = {norm_key(n): n for n in db}
     # Third fallback: noxDB sometimes appended a project tag the run sheet and
-    # the files lack (R42P02_01_SAR19_A_T_C2 vs ..._SAR19_PIC_SAR_MUW_A_T_C2).
+    # the files lack (R25P01_01_IBD001_A_T_C2 vs ..._IBD001_IBD_VIE_A_T_C2).
     # Same IP plate + well, and one name extends the other.
     by_well: Dict[Tuple[str, str], List[str]] = defaultdict(list)
     for k, n in by_norm.items():

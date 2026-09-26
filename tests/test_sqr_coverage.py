@@ -30,25 +30,25 @@ def _row(name, label="P1", kind="sample", sqr="07", seq_name=None, note="", **fl
 
 def test_sheet_spelling_matches_the_sequenced_name(cov):
     """Run sheets differ from sequenced names in separators and well padding."""
-    master = [_row("R16P01_01_9636-20240429-YYP1-A01_CRCradiotherapyP1_A_T_C2", seq_name="")]
-    db = {"R16P01_1_9636_20240429_YYP1_A01_CRCradiotherapyP1_A_T_C2": ["CRC_radiotherapy"]}
+    master = [_row("R16P01_01_1234-20240101-XXP1-A01_DemoCohortP1_A_T_C2", seq_name="")]
+    db = {"R16P01_1_1234_20240101_XXP1_A01_DemoCohortP1_A_T_C2": ["Demo_cohort"]}
     r = cov.compute_coverage(master, db)
     assert r["samples_in_db"] == 1
-    assert r["by_label"][0]["noxdb_projects"] == ["CRC_radiotherapy"]
+    assert r["by_label"][0]["noxdb_projects"] == ["Demo_cohort"]
     assert r["db_samples_not_in_master"] == 0
 
 
 def test_project_tag_added_by_noxdb_still_matches(cov):
-    """PIC/SAR: files and run sheet say ..._SAR19_A_T_C2, noxDB says ..._SAR19_PIC_SAR_MUW_A_T_C2."""
-    r = cov.compute_coverage([_row("R42P02_01_SAR19_A_T_C2")], {"R42P02_01_SAR19_PIC_SAR_MUW_A_T_C2": ["SAR_MUW"]})
+    """Files and run sheet say ..._PAT19_A_T_C2, noxDB says ..._PAT19_PIC_DEMO_MUW_A_T_C2."""
+    r = cov.compute_coverage([_row("R42P02_01_PAT19_A_T_C2")], {"R42P02_01_PAT19_PIC_DEMO_MUW_A_T_C2": ["DEMO_MUW"]})
     assert r["samples_in_db"] == 1
     assert r["db_samples_not_in_master"] == 0
 
 
 def test_same_well_different_sample_does_not_match(cov):
-    """R08: PREDICTS and PCa_Innsbruck plates share IP names but not patient IDs."""
-    r = cov.compute_coverage([_row("R08P01_01_S839704101_PREDICTSP05_A_T_C2")],
-                             {"R08P01_01_294299_PCaInnsbruckP01_A_T_C2": ["PCa_Innsbruck"]})
+    """Two cohorts' plates share IP names but not patient IDs."""
+    r = cov.compute_coverage([_row("R08P01_01_S100000001_CohortBP05_A_T_C2")],
+                             {"R08P01_01_200001_CohortAP01_A_T_C2": ["Cohort_A"]})
     assert r["samples_in_db"] == 0
     assert r["db_samples_not_in_master"] == 1
 

@@ -577,8 +577,8 @@ def check_orphans(cur) -> dict[str, Any]:
 def _sample_identity(sample_name: str, ipr: str, iprp: str) -> tuple | None:
     """Identity of a sample ignoring how its numbers happen to be padded.
 
-    ``R05P01_01_0474408_KielP01_A_T_C2`` and
-    ``R05P01_1_0474408_KielP01_A_T_C2`` are one specimen registered
+    ``R25P01_01_IBD001_IBD_VIE_A_T_C2`` and
+    ``R25P01_1_IBD001_IBD_VIE_A_T_C2`` are one specimen registered
     twice. The plate is the stored ``IPR``/``IPRP``, not the name's
     prefix; the well number is re-normalized; everything after it is
     compared verbatim, because a leading zero inside a subject id is

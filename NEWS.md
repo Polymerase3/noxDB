@@ -10,6 +10,21 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-09-26
+
+### Changed
+- **The quickstart shows invented example data.** Every output in
+  `docs/quickstart.md` (project list, summaries, subjects, visits, samples,
+  files, controls, inputs, export) now uses the fictional `IBD_Vienna`
+  project from the data-preparation guide instead of real database output,
+  since the docs are public. The examples also show the current file types
+  (`fastq_r1`/`fastq_r2`, `zigp_loose`) and the `archive_member` /
+  `archive_offset` columns for FASTQs stored inside tars.
+- The data-preparation and schema pages, two code comments in
+  `scripts/sweep/` and the unit tests use invented sample, patient and
+  project names instead of real ones. The tests check the same cases as
+  before.
+
 ## [0.12.0] - 2026-09-24
 
 ### Added

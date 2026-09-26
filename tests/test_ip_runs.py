@@ -25,10 +25,10 @@ def _sheet(tmp_path, body: str):
 def plates(tmp_path):
     return load_plates(_sheet(tmp_path, (
         "IPR02;IgA;IgA test plate;;;;;;;;;;;2;1;\n"
-        "IPR04;IgG;CORSA 1;;;;;;;;;;;4;03;R02P01\n"
-        ";;CORSA 2;;;;;;;;;;;;04;R02P02\n"
-        "IPR08;IgG;PCa Innsbruck P1;;;;;;;;;;;8;01;R08P01\n"
-        ";;Arno PREDICTS P5 – µl;;;;;;;;;;;;04;R08P01\n"
+        "IPR04;IgG;DEMO 1;;;;;;;;;;;4;03;R02P01\n"
+        ";;DEMO 2;;;;;;;;;;;;04;R02P02\n"
+        "IPR08;IgG;Cohort Alpha P1;;;;;;;;;;;8;01;R08P01\n"
+        ";;Jane BETA P5 – µl;;;;;;;;;;;;04;R08P01\n"
         ";;Total samples sum:;;;;;;;;;;;;;\n"
     )))
 
@@ -44,21 +44,21 @@ def test_old_label_is_kept(plates):
 
 def test_old_label_translates_to_the_sheet_plate(plates):
     index = by_old_label(plates)
-    assert coords_for_old_name(index, "R02P02_01_CORSAp2_4153_A_T_C2") == [("04", "04")]
+    assert coords_for_old_name(index, "R02P02_01_DEMOp2_1001_A_T_C2") == [("04", "04")]
 
 
 def test_clash_is_settled_by_project(plates):
     index = by_old_label(plates)
     name = "R08P01_01_x_A_T_C2"
     assert len(coords_for_old_name(index, name)) == 2
-    assert coords_for_old_name(index, name, {"PREDICTS"}) == [("08", "04")]
-    assert coords_for_old_name(index, name, {"PCa_Innsbruck"}) == [("08", "01")]
+    assert coords_for_old_name(index, name, {"BETA"}) == [("08", "04")]
+    assert coords_for_old_name(index, name, {"Cohort_Alpha"}) == [("08", "01")]
 
 
 def test_true_label_clashing_with_an_old_one(plates):
-    """R02P01 is both the IgA test plate and CORSA 1's old label."""
+    """R02P01 is both the IgA test plate and DEMO 1's old label."""
     index = by_old_label(plates)
-    assert coords_for_old_name(index, "R02P01_05_x", {"CORSA"}) == [("04", "03")]
+    assert coords_for_old_name(index, "R02P01_05_x", {"DEMO"}) == [("04", "03")]
 
 
 def test_run_only_name(plates):
