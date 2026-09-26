@@ -130,6 +130,10 @@ R25P01_87_NC_1_A_T_C2,R25P01_87_NC_1_A_T_C2,baseline,NC,25,01,12,03,A_T_C2,,
 | `sqrp` | **yes** | integer string | **Sequencing** plate within that run. Leave empty for input samples if not applicable. |
 | `library` | **yes** | e.g. `A_T_C2` | Library combination string from your run sheet. |
 | `antibody_class` | no | free text | Only relevant for antibody-capture assays. |
+| `i7_index` | no | A, C, G, T, N | i7 barcode sequence from the run sheet (column `i7 index`). |
+| `i7_index_id` | no | text | The kit's name for it (column `i7 index ID`), e.g. `IDT10_i7_1`. |
+| `i5_index` | no | A, C, G, T, N | i5 barcode sequence (column `i5 index`). |
+| `i5_index_id` | no | text | The kit's name for it (column `i5 index ID`). |
 | `meta_*` | no | any | Sample-level metadata. |
 
 !!! warning "Never read `ipr` or `sqr` off the sample name"

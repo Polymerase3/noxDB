@@ -157,6 +157,26 @@ def test_happy_path_import(tmp_path, clean_db, fake_tier_roots):
     assert payload["counts"]["samples"]["inserted"] == 3
 
 
+def test_barcodes_are_imported(tmp_path, clean_db, fake_tier_roots):
+    proj = _build_project(tmp_path, name="IMP_BC", prefix="BC")
+    (proj / "samples.csv").write_text(
+        "sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library,"
+        "i7_index,i7_index_id,i5_index,i5_index_id\n"
+        "BC_SA1,S_A,baseline,sample,01,01,07,02,libA,taacttggtc,IDT10_i7_1,GTCGTGAATC,IDT10_i5_1\n"
+        "BC_SA2,S_A,m3,sample,01,01,07,02,libA,,,,\n"
+    )
+    (proj / "files" / "manifest.csv").write_text("sample_name,file_path,file_type\n")
+    import_project_from_dir(proj, log_dir=tmp_path / "logs")
+    rows = execute(
+        "SELECT sample_name, i7_index, i7_index_id, i5_index, i5_index_id "
+        "FROM samples ORDER BY sample_name"
+    )
+    assert [tuple(r.values()) for r in rows] == [
+        ("BC_SA1", "TAACTTGGTC", "IDT10_i7_1", "GTCGTGAATC", "IDT10_i5_1"),
+        ("BC_SA2", None, None, None, None),
+    ]
+
+
 def test_dry_run_writes_nothing(tmp_path, clean_db, fake_tier_roots):
     proj = _build_project(tmp_path, name="IMP_DRY", prefix="DRY")
     report = import_project_from_dir(proj, dry_run=True, log_dir=tmp_path / "logs")

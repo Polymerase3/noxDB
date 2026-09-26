@@ -22,6 +22,12 @@ confused — they were, until ``004_ip_and_sequencing_coords``:
 ``SQR`` / ``SQRP``
     Sequencing run and its plate, from the run sheet. Unrelated to the
     name: ``R14P02_77_..`` was sequenced as SQR 07, plate 02.
+
+The same run sheet gives each sequenced sample its barcodes
+(``007_sample_barcodes``): ``i7_index`` / ``i5_index`` are the index
+sequences, ``i7_index_id`` / ``i5_index_id`` the kit's names for them.
+NULL means not known. [`set_sequencing`][noxdb.samples.set_sequencing]
+sets these and ``SQR`` / ``SQRP`` on a sample that already exists.
 """
 
 from __future__ import annotations
@@ -39,11 +45,20 @@ _COLUMNS = (
     "IPRP",
     "SQR",
     "SQRP",
+    "i7_index",
+    "i7_index_id",
+    "i5_index",
+    "i5_index_id",
     "library",
     "antibody_class",
     "created_at",
 )
 _ORDERABLE = frozenset(_COLUMNS)
+
+# Columns set_sequencing may write, all from the sequencing run sheet.
+SEQUENCING_COLUMNS = ("SQR", "SQRP", "i7_index", "i7_index_id", "i5_index", "i5_index_id")
+
+_INDEX_BASES = frozenset("ACGTN")
 
 
 def _row_to_dict(cur, row) -> dict[str, Any]:
@@ -90,6 +105,37 @@ def canonical_plate_id(value: str | None) -> str:
     return s.zfill(2) if s.isdigit() else s
 
 
+def canonical_index(value: str | None) -> str | None:
+    """Return the canonical form of an i7 / i5 index sequence.
+
+    Strips whitespace and upper-cases. The DB only accepts upper-case
+    ``A``, ``C``, ``G``, ``T`` and ``N``.
+
+    Args:
+        value: Raw index sequence (may be ``None``).
+
+    Returns:
+        The sequence, or ``None`` for an empty value ("not known").
+
+    Raises:
+        ValueError: If anything other than A, C, G, T or N remains.
+    """
+    s = (value or "").strip().upper()
+    if not s:
+        return None
+    if not set(s) <= _INDEX_BASES:
+        raise ValueError(
+            f"index sequence {value!r} may only contain A, C, G, T and N"
+        )
+    return s
+
+
+def canonical_index_id(value: str | None) -> str | None:
+    """Return an index's kit name (e.g. ``IDT10_i7_1``) stripped, ``None`` if empty."""
+    s = (value or "").strip()
+    return s or None
+
+
 def create(
     cur,
     visit_id: int,
@@ -102,6 +148,10 @@ def create(
     ipr: str,
     iprp: str,
     antibody_class: str | None = None,
+    i7_index: str | None = None,
+    i7_index_id: str | None = None,
+    i5_index: str | None = None,
+    i5_index_id: str | None = None,
 ) -> int:
     """Insert a sample and return its new ``sample_id``.
 
@@ -123,11 +173,18 @@ def create(
         iprp: IP plate within that run, ``""`` for a run-only sample
             such as an input. Canonicalized like ``ipr``.
         antibody_class: Optional antibody class label.
+        i7_index: i7 index sequence, from the run sheet. Canonicalized
+            via [`canonical_index`][noxdb.samples.canonical_index].
+        i7_index_id: The kit's name for the i7 index (e.g. ``IDT10_i7_1``).
+        i5_index: i5 index sequence. Canonicalized like ``i7_index``.
+        i5_index_id: The kit's name for the i5 index.
 
     Returns:
         The newly inserted ``sample_id``.
 
     Raises:
+        ValueError: If an index sequence has characters other than
+            A, C, G, T and N.
         mariadb.IntegrityError: If ``sample_name`` already exists
             (global UNIQUE), ``visit_id`` does not reference an
             existing visit, or ``sample_type`` is outside the allowed
@@ -136,12 +193,14 @@ def create(
     cur.execute(
         "INSERT INTO samples "
         "(visit_id, sample_name, sample_type, IPR, IPRP, SQR, SQRP, "
-        "library, antibody_class) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "i7_index, i7_index_id, i5_index, i5_index_id, library, antibody_class) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             visit_id, sample_name, sample_type,
             canonical_plate_id(ipr), canonical_plate_id(iprp),
             canonical_plate_id(sqr), canonical_plate_id(sqrp),
+            canonical_index(i7_index), canonical_index_id(i7_index_id),
+            canonical_index(i5_index), canonical_index_id(i5_index_id),
             library, antibody_class,
         ),
     )
@@ -190,6 +249,10 @@ def get_or_create(
     ipr: str,
     iprp: str,
     antibody_class: str | None = None,
+    i7_index: str | None = None,
+    i7_index_id: str | None = None,
+    i5_index: str | None = None,
+    i5_index_id: str | None = None,
 ) -> tuple[int, bool]:
     """Idempotently return the sample id, inserting if needed.
 
@@ -209,6 +272,10 @@ def get_or_create(
         ipr: IP run. Used only on insert.
         iprp: IP plate. Used only on insert.
         antibody_class: Used only on insert.
+        i7_index: Used only on insert.
+        i7_index_id: Used only on insert.
+        i5_index: Used only on insert.
+        i5_index_id: Used only on insert.
 
     Returns:
         ``(sample_id, created)`` where ``created`` is ``True`` iff this
@@ -232,6 +299,10 @@ def get_or_create(
             ipr=ipr,
             iprp=iprp,
             antibody_class=antibody_class,
+            i7_index=i7_index,
+            i7_index_id=i7_index_id,
+            i5_index=i5_index,
+            i5_index_id=i5_index_id,
         )
         return new_id, True
     except mariadb.IntegrityError:
@@ -319,14 +390,20 @@ def update(
     sqrp: str | None = None,
     library: str | None = None,
     antibody_class: str | None = None,
+    i7_index: str | None = None,
+    i7_index_id: str | None = None,
+    i5_index: str | None = None,
+    i5_index_id: str | None = None,
 ) -> bool:
     """Partial update of a sample row.
 
     Only kwargs with non-None values are written. ``visit_id`` and
     ``created_at`` are intentionally NOT updatable — re-parenting a
     sample would corrupt downstream lineage. Setting *antibody_class*
-    to NULL is also out of scope (the helper treats None as "skip");
-    use raw SQL if you need that.
+    or a barcode to NULL is also out of scope (the helper treats None
+    as "skip"); use raw SQL if you need that. To fill in sequencing
+    values without overwriting any by accident, use
+    [`set_sequencing`][noxdb.samples.set_sequencing].
 
     Args:
         cur: Audit-logging cursor from `transaction()`.
@@ -343,9 +420,19 @@ def update(
             ``ipr``.
         library: New library (if not None).
         antibody_class: New antibody class (if not None).
+        i7_index: New i7 index sequence (if not None). Canonicalized
+            via [`canonical_index`][noxdb.samples.canonical_index].
+        i7_index_id: New i7 index name (if not None).
+        i5_index: New i5 index sequence (if not None). Canonicalized
+            like ``i7_index``.
+        i5_index_id: New i5 index name (if not None).
 
     Returns:
         ``True`` iff exactly one row was updated.
+
+    Raises:
+        ValueError: If an index sequence has characters other than
+            A, C, G, T and N.
     """
     fields = {
         "sample_name": sample_name,
@@ -354,6 +441,10 @@ def update(
         "IPRP": canonical_plate_id(iprp) if iprp is not None else None,
         "SQR": canonical_plate_id(sqr) if sqr is not None else None,
         "SQRP": canonical_plate_id(sqrp) if sqrp is not None else None,
+        "i7_index": canonical_index(i7_index),
+        "i7_index_id": canonical_index_id(i7_index_id),
+        "i5_index": canonical_index(i5_index),
+        "i5_index_id": canonical_index_id(i5_index_id),
         "library": library,
         "antibody_class": antibody_class,
     }
@@ -365,6 +456,125 @@ def update(
     params.append(sample_id)
     cur.execute(
         f"UPDATE samples SET {set_clause} WHERE sample_id = ?", tuple(params)
+    )
+    return cur.rowcount > 0
+
+
+def sequencing_changes(
+    stored: dict[str, Any],
+    *,
+    sqr: str | None = None,
+    sqrp: str | None = None,
+    i7_index: str | None = None,
+    i7_index_id: str | None = None,
+    i5_index: str | None = None,
+    i5_index_id: str | None = None,
+) -> tuple[dict[str, Any], list[str]]:
+    """Work out what setting sequencing values on a stored sample would change.
+
+    Nothing is written. The values are canonicalized the way they would
+    be stored; an empty or ``None`` value means "leave as is".
+
+    Args:
+        stored: The sample row, e.g. from [`get`][noxdb.samples.get].
+        sqr: Sequencing run.
+        sqrp: Sequencing plate.
+        i7_index: i7 index sequence.
+        i7_index_id: i7 index name.
+        i5_index: i5 index sequence.
+        i5_index_id: i5 index name.
+
+    Returns:
+        ``(changes, conflicts)``. *changes* maps each column whose value
+        would change to its new value. *conflicts* describes the changes
+        that replace a value the sample already had (rather than fill in
+        an empty one), e.g. ``"SQR '05' → '07'"``.
+
+    Raises:
+        ValueError: If an index sequence has characters other than
+            A, C, G, T and N.
+    """
+    incoming = {
+        "SQR": canonical_plate_id(sqr),
+        "SQRP": canonical_plate_id(sqrp),
+        "i7_index": canonical_index(i7_index),
+        "i7_index_id": canonical_index_id(i7_index_id),
+        "i5_index": canonical_index(i5_index),
+        "i5_index_id": canonical_index_id(i5_index_id),
+    }
+    changes: dict[str, Any] = {}
+    conflicts: list[str] = []
+    for column, new in incoming.items():
+        old = stored.get(column)
+        if new in (None, "") or new == old:
+            continue
+        changes[column] = new
+        if old not in (None, ""):
+            conflicts.append(f"{column} {old!r} → {new!r}")
+    return changes, conflicts
+
+
+def set_sequencing(
+    cur,
+    sample_id: int,
+    *,
+    sqr: str | None = None,
+    sqrp: str | None = None,
+    i7_index: str | None = None,
+    i7_index_id: str | None = None,
+    i5_index: str | None = None,
+    i5_index_id: str | None = None,
+    overwrite: bool = False,
+) -> bool:
+    """Set the sequencing run, plate and barcodes of an existing sample.
+
+    Only the values given are written. An empty column is filled in and
+    one that already holds the same value is left alone. One that holds
+    a *different* value is refused unless *overwrite* is set: a sample's
+    sequencing values normally change only when it is re-sequenced, so a
+    difference is more often a mismatched row than a correction.
+
+    Args:
+        cur: Audit-logging cursor from `transaction()`.
+        sample_id: Sample to update. Must exist.
+        sqr: Sequencing run. Canonicalized via
+            [`canonical_plate_id`][noxdb.samples.canonical_plate_id].
+        sqrp: Sequencing plate. Canonicalized like ``sqr``.
+        i7_index: i7 index sequence. Canonicalized via
+            [`canonical_index`][noxdb.samples.canonical_index].
+        i7_index_id: i7 index name, e.g. ``IDT10_i7_1``.
+        i5_index: i5 index sequence. Canonicalized like ``i7_index``.
+        i5_index_id: i5 index name.
+        overwrite: Replace values that differ instead of refusing.
+
+    Returns:
+        ``True`` iff the row changed.
+
+    Raises:
+        ValueError: If the sample does not exist, if a value would
+            replace a different stored one and *overwrite* is not set,
+            or if an index sequence has characters other than A, C, G,
+            T and N.
+    """
+    stored = get(cur, sample_id)
+    if stored is None:
+        raise ValueError(f"no sample with sample_id={sample_id}")
+    changes, conflicts = sequencing_changes(
+        stored, sqr=sqr, sqrp=sqrp,
+        i7_index=i7_index, i7_index_id=i7_index_id,
+        i5_index=i5_index, i5_index_id=i5_index_id,
+    )
+    if conflicts and not overwrite:
+        raise ValueError(
+            f"sample {stored['sample_name']!r} already has other sequencing "
+            f"values ({'; '.join(conflicts)}); pass overwrite=True to replace them"
+        )
+    if not changes:
+        return False
+    set_clause = ", ".join(f"{column} = ?" for column in changes)
+    cur.execute(
+        f"UPDATE samples SET {set_clause} WHERE sample_id = ?",
+        (*changes.values(), sample_id),
     )
     return cur.rowcount > 0
 

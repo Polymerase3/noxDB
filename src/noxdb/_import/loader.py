@@ -55,6 +55,10 @@ class SampleRow:
     antibody_class: str | None
     metadata: dict[str, Any]
     row_num: int
+    i7_index: str | None = None
+    i7_index_id: str | None = None
+    i5_index: str | None = None
+    i5_index_id: str | None = None
 
 
 @dataclass
@@ -253,11 +257,17 @@ def _load_samples(path: Path) -> tuple[list[SampleRow], list[str]]:
                     antibody_class=(r.get("antibody_class") or "").strip() or None,
                     metadata=_meta_dict(r, meta_keys),
                     row_num=i,
+                    **barcodes(r),
                 )
             )
         return rows, _warn_extras(extras, path.name)
     finally:
         fh.close()
+
+
+def barcodes(row: dict[str, str]) -> dict[str, str | None]:
+    """The optional barcode cells of a samples row, stripped; empty → ``None``."""
+    return {col: (row.get(col) or "").strip() or None for col in schema.BARCODE_COLUMNS}
 
 
 def _load_manifest(path: Path) -> tuple[list[FileRow], list[str]]:

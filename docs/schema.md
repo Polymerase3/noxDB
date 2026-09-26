@@ -111,11 +111,21 @@ One row per physical sample / library / Ig-class measurement. `sample_name` is g
 | `IPRP`           | `VARCHAR(10)`                                                | NO       | IP plate within that run — from the IP runs sheet, zero-padded |
 | `SQR`            | `VARCHAR(10)`                                                | NO       | Sequencing run — from the run sheet, zero-padded |
 | `SQRP`           | `VARCHAR(10)`                                                | NO       | Sequencing plate within that run — from the run sheet, zero-padded |
+| `i7_index`       | `VARCHAR(32)`                                                | YES      | i7 barcode sequence — from the run sheet; upper-case A/C/G/T/N (CHECK) |
+| `i7_index_id`    | `VARCHAR(50)`                                                | YES      | The kit's name for the i7 index, e.g. `IDT10_i7_1` |
+| `i5_index`       | `VARCHAR(32)`                                                | YES      | i5 barcode sequence — from the run sheet; upper-case A/C/G/T/N (CHECK) |
+| `i5_index_id`    | `VARCHAR(50)`                                                | YES      | The kit's name for the i5 index |
 | `library`        | `VARCHAR(50)`                                                | NO       |                                                |
 | `antibody_class` | `VARCHAR(50)`                                                | YES      |                                                |
 | `created_at`     | `TIMESTAMP`                                                  | NO       | DEFAULT `CURRENT_TIMESTAMP`                    |
 
 `NC` was added to the `sample_type` ENUM in migration `002_controls_support`.
+
+The four barcode columns were added in migration `007_sample_barcodes`.
+They come from the same run sheet as `SQR` / `SQRP`, and `NULL` means not
+known. [`samples.set_sequencing`][noxdb.samples.set_sequencing] and
+`scripts/apply_run_sheet.py` ([`noxdb.run_sheet`][noxdb.run_sheet]) set
+all six on samples that already exist.
 
 #### Two coordinate systems
 

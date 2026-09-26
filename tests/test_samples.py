@@ -395,3 +395,127 @@ def test_exists_requires_exactly_one_arg(two_visits):
             samples.exists(cur)
         with pytest.raises(ValueError):
             samples.exists(cur, 1, name="x")
+
+
+# --------------------------------------------------------------------------- #
+# barcodes (schema 007)
+# --------------------------------------------------------------------------- #
+
+def _plain_sample(cur, visit_id, name="SEQ_A", sqr="", sqrp=""):
+    return samples.create(cur, visit_id, name, "sample", sqr, sqrp, "libA", ipr="01", iprp="01")
+
+
+def test_create_stores_barcodes_upper_case(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = samples.create(
+            cur, v1, "BC_A", "sample", "07", "02", "libA", ipr="01", iprp="01",
+            i7_index=" taacttggtc ", i7_index_id="IDT10_i7_1",
+            i5_index="GTCGTGAATC", i5_index_id=" IDT10_i5_1",
+        )
+        row = samples.get(cur, sid)
+    assert (row["i7_index"], row["i7_index_id"]) == ("TAACTTGGTC", "IDT10_i7_1")
+    assert (row["i5_index"], row["i5_index_id"]) == ("GTCGTGAATC", "IDT10_i5_1")
+
+
+def test_barcodes_default_to_null(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        row = samples.get(cur, _plain_sample(cur, v1))
+    assert [row[c] for c in ("i7_index", "i7_index_id", "i5_index", "i5_index_id")] == [None] * 4
+
+
+def test_create_rejects_a_bad_index_sequence(two_visits):
+    v1, _ = two_visits
+    with pytest.raises(ValueError, match="A, C, G, T and N"):
+        with transaction() as cur:
+            samples.create(cur, v1, "BC_BAD", "sample", "07", "02", "libA",
+                           ipr="01", iprp="01", i7_index="ACGT-ACGT")
+
+
+def test_db_rejects_a_lower_case_index(two_visits):
+    """The CHECK is case sensitive even under the case-insensitive collation."""
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = _plain_sample(cur, v1)
+    with pytest.raises(mariadb.Error):
+        with transaction() as cur:
+            cur.execute("UPDATE samples SET i7_index = ? WHERE sample_id = ?", ("acgt", sid))
+
+
+def test_update_sets_barcodes(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = _plain_sample(cur, v1)
+        assert samples.update(cur, sid, i5_index="gtcgtgaatc", i5_index_id="IDT10_i5_1")
+        row = samples.get(cur, sid)
+    assert (row["i5_index"], row["i5_index_id"]) == ("GTCGTGAATC", "IDT10_i5_1")
+    assert row["i7_index"] is None
+
+
+# --------------------------------------------------------------------------- #
+# set_sequencing
+# --------------------------------------------------------------------------- #
+
+def test_sequencing_changes_separates_fills_from_conflicts():
+    stored = {"SQR": "05", "SQRP": "", "i7_index": None, "i7_index_id": None,
+              "i5_index": "AAAA", "i5_index_id": None}
+    changes, conflicts = samples.sequencing_changes(
+        stored, sqr="5", sqrp="2", i7_index="acgt", i5_index="CCCC",
+    )
+    # sqr '5' is the stored '05'; sqrp and i7 fill empty columns; i5 replaces.
+    assert changes == {"SQRP": "02", "i7_index": "ACGT", "i5_index": "CCCC"}
+    assert conflicts == ["i5_index 'AAAA' → 'CCCC'"]
+
+
+def test_set_sequencing_fills_in_empty_values(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = _plain_sample(cur, v1)
+        assert samples.set_sequencing(cur, sid, sqr="7", sqrp="2", i7_index="taacttggtc",
+                                      i7_index_id="IDT10_i7_1") is True
+        row = samples.get(cur, sid)
+    assert (row["SQR"], row["SQRP"], row["i7_index"], row["i7_index_id"]) == (
+        "07", "02", "TAACTTGGTC", "IDT10_i7_1",
+    )
+
+
+def test_set_sequencing_same_values_change_nothing(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = _plain_sample(cur, v1, sqr="07", sqrp="02")
+        assert samples.set_sequencing(cur, sid, sqr="07", sqrp="2") is False
+
+
+def test_set_sequencing_leaves_values_not_given_alone(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = _plain_sample(cur, v1, sqr="07", sqrp="02")
+        samples.set_sequencing(cur, sid, i5_index="GTCGTGAATC")
+        row = samples.get(cur, sid)
+    assert (row["SQR"], row["SQRP"], row["i5_index"]) == ("07", "02", "GTCGTGAATC")
+
+
+def test_set_sequencing_refuses_to_replace_a_different_value(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = _plain_sample(cur, v1, sqr="07", sqrp="02")
+    with pytest.raises(ValueError, match=r"SQR '07' → '08'.*overwrite=True"):
+        with transaction() as cur:
+            samples.set_sequencing(cur, sid, sqr="08", sqrp="02")
+    with transaction() as cur:
+        assert samples.get(cur, sid)["SQR"] == "07"
+
+
+def test_set_sequencing_overwrite_replaces(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = _plain_sample(cur, v1, sqr="07", sqrp="02")
+        assert samples.set_sequencing(cur, sid, sqr="08", overwrite=True) is True
+        assert samples.get(cur, sid)["SQR"] == "08"
+
+
+def test_set_sequencing_unknown_sample_raises(two_visits):
+    with pytest.raises(ValueError, match="no sample with sample_id"):
+        with transaction() as cur:
+            samples.set_sequencing(cur, 9_999_999, sqr="07")

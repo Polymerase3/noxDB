@@ -95,6 +95,7 @@ nav:
       - visits: reference/visits.md
       - samples: reference/samples.md
       - ip_runs: reference/ip_runs.md
+      - run_sheet: reference/run_sheet.md
       - metadata: reference/metadata.md
       - files: reference/files.md
       - queries: reference/queries.md

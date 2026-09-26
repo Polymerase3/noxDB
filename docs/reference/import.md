@@ -38,11 +38,13 @@ subjects, visits and samples the database already has. The import reuses
 those rows as they are, so the bundle must agree with them:
 
 - A **different** value for a stored field (a subject's sex, a visit's
-  age or group, a sample's visit, type, plate coordinates, library or
-  antibody class) is an **error**, and the import is refused. Correct the
-  bundle, or update the database explicitly first.
+  age or group, a sample's visit, type, plate coordinates, barcodes,
+  library or antibody class) is an **error**, and the import is refused.
+  Correct the bundle, or update the database explicitly first.
 - A value for a field the database has **empty** (an age, a sample's
-  SQR) is a **warning**: the import does not fill it in.
+  SQR or barcodes) is a **warning**: the import does not fill it in. A
+  sample's `SQR` / `SQRP` and barcodes can be filled in with
+  `scripts/apply_run_sheet.py` (see [`run_sheet`](run_sheet.md)).
 - A metadata value that **changes** is a **warning**: the import
   overwrites it.
 - An empty value in the bundle asserts nothing.

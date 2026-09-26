@@ -15,7 +15,8 @@ Master CSV layout
                       [meta_*]
   samples.csv         project_name, sample_name, subject_code, timepoint,
                       sample_type, ipr, iprp, sqr, sqrp, library,
-                      [antibody_class], [meta_*]
+                      [antibody_class], [i7_index], [i7_index_id],
+                      [i5_index], [i5_index_id], [meta_*]
   files/manifest.csv  project_name, sample_name, file_path, file_type,
                       [storage_tier], [checksum_md5]   (optional file)
 
@@ -48,6 +49,7 @@ from noxdb._import.loader import (
     SampleRow,
     SubjectRow,
     VisitRow,
+    barcodes,
 )
 from noxdb._import.runner import (
     ImportReport,
@@ -195,6 +197,7 @@ def _read_samples(path: Path) -> dict[str, list[SampleRow]]:
                 antibody_class=(row.get("antibody_class") or "").strip() or None,
                 metadata=_meta_dict(row, mkeys),
                 row_num=i,
+                **barcodes(row),
             ))
         return dict(by)
     finally:

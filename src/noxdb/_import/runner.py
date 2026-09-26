@@ -80,6 +80,11 @@ class ValidationResult:
 # Validation
 # --------------------------------------------------------------------------- #
 
+def _barcodes_of(r: loader.SampleRow) -> dict[str, str | None]:
+    """A sample row's barcode cells, keyed by column name."""
+    return {column: getattr(r, column) for column in schema.BARCODE_COLUMNS}
+
+
 def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
     """Schema-level checks: enum membership and parseable numerics.
 
@@ -132,6 +137,9 @@ def _validate_schema(bundle: loader.ProjectBundle) -> list[str]:
                 )
             except ValueError as exc:
                 errs.append(str(exc))
+        errs.extend(schema.barcode_errors(
+            _barcodes_of(r), where=f"samples.csv row {r.row_num}",
+        ))
 
     for r in bundle.files:
         if r.file_type not in schema.ALLOWED_FILE_TYPE:
@@ -332,14 +340,15 @@ def _same_value(stored: Any, incoming: Any) -> bool:
 
 
 def _compare(where: str, what: str, column: str, stored: Any, incoming: Any,
-             errs: list[str], warns: list[str]) -> None:
+             errs: list[str], warns: list[str], *, fill_hint: str | None = None) -> None:
     """Check one column of a row the database already has.
 
     The import keeps existing rows as they are, so a bundle value that
     differs from the stored one would be dropped without a word: that is
     an error. A stored empty value the bundle would fill is dropped the
-    same way, but loses nothing, so it is a warning. An empty bundle value
-    asserts nothing.
+    same way, but loses nothing, so it is a warning, ending in
+    *fill_hint* when there is another way to set it. An empty bundle
+    value asserts nothing.
     """
     if incoming in (None, ""):
         return
@@ -347,6 +356,7 @@ def _compare(where: str, what: str, column: str, stored: Any, incoming: Any,
         warns.append(
             f"{where}: {what} exists without {column}; the import does not "
             f"fill in {column}={incoming!r} on existing rows"
+            + (f"; {fill_hint}" if fill_hint else "")
         )
     elif stored != incoming:
         errs.append(
@@ -366,6 +376,16 @@ def _metadata_overwrites(where: str, what: str, new: dict[str, Any], parent_id: 
                 f"will be overwritten with {value!r}"
             )
     return warns
+
+
+def _canonical_barcode(column: str, raw: str | None) -> str | None:
+    """A barcode cell as it would be stored (an invalid sequence is a schema error)."""
+    if column.endswith("_id"):
+        return samples.canonical_index_id(raw)
+    try:
+        return samples.canonical_index(raw)
+    except ValueError:
+        return None
 
 
 def _parse_age(raw: str) -> int | None:
@@ -436,6 +456,7 @@ def _validate_existing(cur, bundle: loader.ProjectBundle) -> tuple[list[str], li
         for r in _fetch_in(
             cur,
             "SELECT s.sample_id, s.sample_name, s.sample_type, s.IPR, s.IPRP, s.SQR, s.SQRP, "
+            "s.i7_index, s.i7_index_id, s.i5_index, s.i5_index_id, "
             "s.library, s.antibody_class, v.timepoint, sub.subject_code "
             "FROM samples s JOIN visits v ON v.visit_id = s.visit_id "
             "JOIN subjects sub ON sub.subject_id = v.subject_id",
@@ -457,9 +478,16 @@ def _validate_existing(cur, bundle: loader.ProjectBundle) -> tuple[list[str], li
                 f"puts it under ({r.subject_code!r}, {r.timepoint!r})"
             )
         _compare(where, what, "sample_type", stored["sample_type"], r.sample_type, errs, warns)
-        for column, value in (("IPR", r.ipr), ("IPRP", r.iprp), ("SQR", r.sqr), ("SQRP", r.sqrp)):
+        for column, value in (("IPR", r.ipr), ("IPRP", r.iprp)):
             _compare(where, what, column, stored[column],
                      samples.canonical_plate_id(value), errs, warns)
+        sequencing = {"SQR": samples.canonical_plate_id(r.sqr),
+                      "SQRP": samples.canonical_plate_id(r.sqrp)}
+        sequencing.update({column: _canonical_barcode(column, value)
+                           for column, value in _barcodes_of(r).items()})
+        for column, value in sequencing.items():
+            _compare(where, what, column, stored[column], value, errs, warns,
+                     fill_hint="set it with scripts/apply_run_sheet.py")
         _compare(where, what, "library", stored["library"], r.library, errs, warns)
         _compare(where, what, "antibody_class", stored["antibody_class"], r.antibody_class,
                  errs, warns)
@@ -577,6 +605,7 @@ def _commit(
             cur, vid, sm.sample_name, sm.sample_type, sm.sqr, sm.sqrp,
             sm.library, ipr=sm.ipr, iprp=sm.iprp,
             antibody_class=sm.antibody_class,
+            **_barcodes_of(sm),
         )
         sample_ids[sm.sample_name] = sid
         counts["samples"]["inserted" if created else "existing"] += 1

@@ -13,6 +13,7 @@ Every page below is auto-generated from the docstrings in
 | [`visits`](visits.md)                        | CRUD for `visits` (keyed on `(subject_id, timepoint)`)                  |
 | [`samples`](samples.md)                      | CRUD for `samples` (`sample_name` globally UNIQUE)                      |
 | [`ip_runs`](ip_runs.md)                      | IP run/plate coordinates from the "Overview of IP runs" sheet           |
+| [`run_sheet`](run_sheet.md)                  | SQR/SQRP and barcodes from the sequencing run sheet, for existing samples |
 | [`metadata`](metadata.md)                    | EAV wrapper for `visit_metadata` and `sample_metadata`                  |
 | [`files`](files.md)                          | Filesystem-validating registration for `sample_files`                   |
 | [`queries`](queries.md)                      | Read-only joins, tidy tables, integrity checks                          |
