@@ -10,6 +10,7 @@ Master CSV layout
 -----------------
   projects.csv        project_name, [description], [pi_name]
   subjects.csv        project_name, subject_code, sex, [origin]
+                      (no meta_* — put subject-level metadata in visits.csv)
   visits.csv          project_name, subject_code, timepoint, group_test, age,
                       [meta_*]
   samples.csv         project_name, sample_name, subject_code, timepoint,
@@ -51,13 +52,9 @@ from noxdb._import.loader import (
 from noxdb._import.runner import (
     ImportReport,
     _commit,
-    _validate_db_collisions,
-    _validate_disk,
-    _validate_referential,
-    _validate_schema,
     _write_log,
+    validate_bundle,
 )
-from noxdb import projects as projects_mod
 from noxdb.connection import close_pool, init_pool, transaction
 
 
@@ -124,6 +121,7 @@ def _read_subjects(path: Path) -> dict[str, list[SubjectRow]]:
     try:
         header = list(reader.fieldnames or [])
         _require_cols(header, ("project_name", "subject_code", "sex"), path)
+        _schema.check_no_subject_metadata(header, path.name)
         by: dict[str, list[SubjectRow]] = defaultdict(list)
         for i, row in enumerate(reader, start=2):
             pname = row["project_name"].strip()
@@ -290,23 +288,14 @@ def _import_bundle(
         project_name=bundle.project.project_name,
         dry_run=dry_run,
         force=force,
-        warnings=list(bundle.warnings),
     )
 
-    errors: list[str] = []
-    errors.extend(_validate_schema(bundle))
-    errors.extend(_validate_referential(bundle))
-    if not skip_disk_check:
-        errors.extend(_validate_disk(bundle))
-
     with transaction() as cur:
-        existing = projects_mod.get_by_name(cur, bundle.project.project_name)
-        if existing is not None and not force:
-            errors.append(
-                f"project {bundle.project.project_name!r} already exists "
-                f"(project_id={existing['project_id']}); rerun with --force to append."
-            )
-        errors.extend(_validate_db_collisions(cur, bundle))
+        result = validate_bundle(
+            bundle, cur=cur, force=force, skip_disk_check=skip_disk_check,
+        )
+    report.warnings = result.warnings
+    errors = result.errors
 
     if errors:
         report.errors = errors
@@ -408,9 +397,17 @@ def main(argv: list[str] | None = None) -> int:
 
     failed  = [r for r in reports if r.errors]
     ok      = len(reports) - len(failed)
+    warned  = [r for r in reports if r.warnings]
 
     print(f"\n{'─' * 60}")
     print(f"  {len(reports)} project(s) total   {ok} OK   {len(failed)} failed")
+
+    if warned:
+        print("\n  Warnings:")
+        for r in warned:
+            print(f"  {r.project_name}:")
+            for w in r.warnings:
+                print(f"    - {w}")
 
     if failed:
         print()

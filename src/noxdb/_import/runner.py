@@ -19,8 +19,9 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from noxdb import files as files_mod
 from noxdb import metadata, projects, samples, subjects, visits
@@ -58,6 +59,21 @@ class ImportReport:
             "counts": self.counts,
             "duration_seconds": round(self.duration_seconds, 3),
         }
+
+
+@dataclass
+class ValidationResult:
+    """What [`validate_bundle`][noxdb._import.runner.validate_bundle] found.
+
+    ``errors`` block an import; ``warnings`` don't, but are worth reading.
+    """
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        """``True`` when there are no errors."""
+        return not self.errors
 
 
 # --------------------------------------------------------------------------- #
@@ -270,6 +286,244 @@ def _validate_db_collisions(cur, bundle: loader.ProjectBundle) -> list[str]:
     return errs
 
 
+# Values per ``IN (...)`` query when comparing a bundle with the database.
+_LOOKUP_CHUNK = 500
+
+# DECIMAL(20,6): the precision a numeric metadata value is stored with.
+_NUMERIC_SCALE = Decimal("0.000001")
+
+_METADATA_COLUMNS = "key_name, value_int, value_numeric, value_bool, value_text, value_type"
+
+
+def _fetch_in(cur, select: str, column: str, values: Iterable[Any]) -> list[dict[str, Any]]:
+    """Run ``<select> WHERE <column> IN (...)`` over *values*, in chunks."""
+    unique = list(dict.fromkeys(values))
+    rows: list[dict[str, Any]] = []
+    for i in range(0, len(unique), _LOOKUP_CHUNK):
+        chunk = unique[i:i + _LOOKUP_CHUNK]
+        marks = ", ".join(["?"] * len(chunk))
+        cur.execute(f"{select} WHERE {column} IN ({marks})", tuple(chunk))
+        names = [d[0] for d in cur.description]
+        rows.extend(dict(zip(names, row)) for row in cur.fetchall())
+    return rows
+
+
+def _stored_metadata(cur, table: str, parent_col: str, parent_ids: list[int]) -> dict[tuple[int, str], Any]:
+    """Existing metadata of *parent_ids*, keyed by ``(parent_id, key_name)``."""
+    rows = _fetch_in(
+        cur, f"SELECT {parent_col}, {_METADATA_COLUMNS} FROM {table}", parent_col, parent_ids,
+    )
+    return {(r[parent_col], r["key_name"]): metadata._row_to_value(r) for r in rows}
+
+
+def _same_value(stored: Any, incoming: Any) -> bool:
+    """Whether a stored metadata value equals the one a bundle would write.
+
+    Numbers compare by value at the stored precision, since DECIMAL(20,6)
+    comes back as ``Decimal``. Booleans only equal booleans.
+    """
+    if isinstance(stored, bool) or isinstance(incoming, bool):
+        return isinstance(stored, bool) and isinstance(incoming, bool) and stored == incoming
+    numbers = (int, float, Decimal)
+    if isinstance(stored, numbers) and isinstance(incoming, numbers):
+        return (Decimal(str(stored)).quantize(_NUMERIC_SCALE)
+                == Decimal(str(incoming)).quantize(_NUMERIC_SCALE))
+    return stored == incoming
+
+
+def _compare(where: str, what: str, column: str, stored: Any, incoming: Any,
+             errs: list[str], warns: list[str]) -> None:
+    """Check one column of a row the database already has.
+
+    The import keeps existing rows as they are, so a bundle value that
+    differs from the stored one would be dropped without a word: that is
+    an error. A stored empty value the bundle would fill is dropped the
+    same way, but loses nothing, so it is a warning. An empty bundle value
+    asserts nothing.
+    """
+    if incoming in (None, ""):
+        return
+    if stored in (None, ""):
+        warns.append(
+            f"{where}: {what} exists without {column}; the import does not "
+            f"fill in {column}={incoming!r} on existing rows"
+        )
+    elif stored != incoming:
+        errs.append(
+            f"{where}: {what} already exists with {column}={stored!r}; "
+            f"the bundle has {incoming!r}"
+        )
+
+
+def _metadata_overwrites(where: str, what: str, new: dict[str, Any], parent_id: int,
+                         stored: dict[tuple[int, str], Any]) -> list[str]:
+    """Warn about metadata keys whose stored value the import would replace."""
+    warns = []
+    for key, value in new.items():
+        if (parent_id, key) in stored and not _same_value(stored[(parent_id, key)], value):
+            warns.append(
+                f"{where}: {what} metadata {key}={stored[(parent_id, key)]!r} "
+                f"will be overwritten with {value!r}"
+            )
+    return warns
+
+
+def _parse_age(raw: str) -> int | None:
+    """The age the commit would store, or ``None`` (unparseable ages are schema errors)."""
+    raw = (raw or "").strip()
+    if raw.upper() in ("", "NA", "N/A"):
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _validate_existing(cur, bundle: loader.ProjectBundle) -> tuple[list[str], list[str]]:
+    """Compare the rows a bundle shares with the database.
+
+    A bundle adding to an existing project repeats subjects, visits and
+    samples the database already holds, and the commit reuses those rows
+    unchanged (``get_or_create``). Any value that differs would be lost
+    silently, so each one is reported here, before anything is written.
+    Metadata is different: the commit does overwrite it, so a changed
+    value is a warning, not an error.
+
+    Returns:
+        ``(errors, warnings)``.
+    """
+    errs: list[str] = []
+    warns: list[str] = []
+
+    codes = [s.subject_code for s in bundle.subjects]
+    stored_subjects = {
+        r["subject_code"]: r
+        for r in _fetch_in(
+            cur, "SELECT subject_id, subject_code, sex, origin FROM subjects", "subject_code", codes,
+        )
+    }
+    for r in bundle.subjects:
+        stored = stored_subjects.get(r.subject_code)
+        if stored is None:
+            continue
+        where, what = f"subjects.csv row {r.row_num}", f"subject {r.subject_code!r}"
+        _compare(where, what, "sex", stored["sex"], subjects._norm_sex(r.sex), errs, warns)
+        _compare(where, what, "origin", stored["origin"], r.origin, errs, warns)
+
+    code_of = {r["subject_id"]: code for code, r in stored_subjects.items()}
+    stored_visits = {
+        (code_of[r["subject_id"]], r["timepoint"]): r
+        for r in _fetch_in(
+            cur, "SELECT visit_id, subject_id, timepoint, group_test, age FROM visits",
+            "subject_id", list(code_of),
+        )
+    }
+    visit_meta = _stored_metadata(
+        cur, "visit_metadata", "visit_id", [r["visit_id"] for r in stored_visits.values()],
+    )
+    for r in bundle.visits:
+        stored = stored_visits.get((r.subject_code, r.timepoint))
+        if stored is None:
+            continue
+        where = f"visits.csv row {r.row_num}"
+        what = f"visit ({r.subject_code!r}, {r.timepoint!r})"
+        _compare(where, what, "group_test", stored["group_test"], r.group_test, errs, warns)
+        _compare(where, what, "age", stored["age"], _parse_age(r.age), errs, warns)
+        warns.extend(_metadata_overwrites(where, what, r.metadata, stored["visit_id"], visit_meta))
+
+    stored_samples = {
+        r["sample_name"]: r
+        for r in _fetch_in(
+            cur,
+            "SELECT s.sample_id, s.sample_name, s.sample_type, s.IPR, s.IPRP, s.SQR, s.SQRP, "
+            "s.library, s.antibody_class, v.timepoint, sub.subject_code "
+            "FROM samples s JOIN visits v ON v.visit_id = s.visit_id "
+            "JOIN subjects sub ON sub.subject_id = v.subject_id",
+            "s.sample_name", [s.sample_name for s in bundle.samples],
+        )
+    }
+    sample_meta = _stored_metadata(
+        cur, "sample_metadata", "sample_id", [r["sample_id"] for r in stored_samples.values()],
+    )
+    for r in bundle.samples:
+        stored = stored_samples.get(r.sample_name)
+        if stored is None:
+            continue
+        where, what = f"samples.csv row {r.row_num}", f"sample {r.sample_name!r}"
+        if (stored["subject_code"], stored["timepoint"]) != (r.subject_code, r.timepoint):
+            errs.append(
+                f"{where}: {what} already exists under visit "
+                f"({stored['subject_code']!r}, {stored['timepoint']!r}); the bundle "
+                f"puts it under ({r.subject_code!r}, {r.timepoint!r})"
+            )
+        _compare(where, what, "sample_type", stored["sample_type"], r.sample_type, errs, warns)
+        for column, value in (("IPR", r.ipr), ("IPRP", r.iprp), ("SQR", r.sqr), ("SQRP", r.sqrp)):
+            _compare(where, what, column, stored[column],
+                     samples.canonical_plate_id(value), errs, warns)
+        _compare(where, what, "library", stored["library"], r.library, errs, warns)
+        _compare(where, what, "antibody_class", stored["antibody_class"], r.antibody_class,
+                 errs, warns)
+        warns.extend(_metadata_overwrites(where, what, r.metadata, stored["sample_id"], sample_meta))
+
+    return errs, warns
+
+
+def validate_bundle(
+    bundle: loader.ProjectBundle,
+    *,
+    cur=None,
+    force: bool = False,
+    skip_disk_check: bool = False,
+) -> ValidationResult:
+    """Check a bundle without writing anything.
+
+    Every problem is collected, not just the first. Without *cur* only
+    the checks that need no database run: allowed values, references
+    between the files, duplicates and (unless *skip_disk_check*) whether
+    the manifest's files exist. That is enough for a form that has no
+    database access.
+
+    With *cur* the bundle is also checked against the database: the
+    project must not exist yet unless *force* is set, a file path must
+    not belong to another sample, and every subject, visit and sample
+    the database already holds must agree with the bundle (see
+    ``_validate_existing``). The import runs exactly these checks before
+    it commits.
+
+    Args:
+        bundle: A bundle from
+            [`load_project_dir`][noxdb._import.loader.load_project_dir],
+            or one built in memory.
+        cur: Cursor to read the database with, e.g. from
+            [`transaction`][noxdb.connection.transaction]. Nothing is written.
+        force: Allow adding to a project that already exists.
+        skip_disk_check: Don't check that manifest files exist on this host.
+
+    Returns:
+        A [`ValidationResult`][noxdb._import.runner.ValidationResult].
+    """
+    result = ValidationResult(warnings=list(bundle.warnings) + _plate_warnings(bundle))
+    result.errors.extend(_validate_schema(bundle))
+    result.errors.extend(_validate_referential(bundle))
+    if not skip_disk_check:
+        result.errors.extend(_validate_disk(bundle))
+    if cur is None:
+        return result
+
+    existing_project = projects.get_by_name(cur, bundle.project.project_name)
+    if existing_project is not None and not force:
+        result.errors.append(
+            f"project {bundle.project.project_name!r} already exists "
+            f"(project_id={existing_project['project_id']}); pass force=True "
+            "(--force on the command line) to add to it."
+        )
+    result.errors.extend(_validate_db_collisions(cur, bundle))
+    errs, warns = _validate_existing(cur, bundle)
+    result.errors.extend(errs)
+    result.warnings.extend(warns)
+    return result
+
+
 # --------------------------------------------------------------------------- #
 # Commit
 # --------------------------------------------------------------------------- #
@@ -389,13 +643,16 @@ def import_project_from_dir(
     """Validate and (unless *dry_run*) import the project under *root*.
 
     The runner performs validation in a read-only pass before any
-    writes happen, so a failed import never leaves the database in a
-    half-written state. With ``force=True`` a re-run on the same
-    folder re-uses existing rows via the
+    writes happen (see
+    [`validate_bundle`][noxdb._import.runner.validate_bundle]), so a
+    failed import never leaves the database in a half-written state.
+    With ``force=True`` a re-run on the same folder, or a bundle adding
+    to an existing project, re-uses existing rows via the
     ``get_or_create`` / ``get_or_register`` / ``set_*`` semantics of
     the CRUD layer; the report distinguishes ``inserted`` from
     ``existing`` (or, for metadata, ``inserted`` vs ``updated`` vs
-    ``unchanged``).
+    ``unchanged``). A reused subject, visit or sample must carry the
+    same values as the database, or the import is refused.
 
     Cross-project collisions on ``sample_name`` or ``file_path`` are
     refused even with ``force=True`` — those UNIQUEs are global by
@@ -429,27 +686,17 @@ def import_project_from_dir(
         project_name=bundle.project.project_name,
         dry_run=dry_run,
         force=force,
-        warnings=list(bundle.warnings) + _plate_warnings(bundle),
     )
 
-    errors: list[str] = []
-    errors.extend(_validate_schema(bundle))
-    errors.extend(_validate_referential(bundle))
-    if not skip_disk_check:
-        errors.extend(_validate_disk(bundle))
-
-    # The collision check needs a cursor; run it in its own short read
-    # transaction so we can present all validation errors before deciding
-    # whether to commit or refuse.
+    # The database checks run in their own short read transaction, so
+    # every validation error is presented before deciding whether to
+    # commit or refuse.
     with transaction() as cur:
-        existing_project = projects.get_by_name(cur, bundle.project.project_name)
-        if existing_project is not None and not force:
-            errors.append(
-                f"project {bundle.project.project_name!r} already exists "
-                f"(project_id={existing_project['project_id']}); rerun with "
-                "force=True to append."
-            )
-        errors.extend(_validate_db_collisions(cur, bundle))
+        result = validate_bundle(
+            bundle, cur=cur, force=force, skip_disk_check=skip_disk_check,
+        )
+    report.warnings = result.warnings
+    errors = result.errors
 
     if errors:
         report.errors = errors

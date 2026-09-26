@@ -8,6 +8,7 @@ and exercises :func:`import_project_from_dir`.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -278,20 +279,21 @@ def test_sample_name_shared_across_projects_is_linked(
     proj_a = _build_project(tmp_path, name="COLL_A", prefix="CA")
     report_a = import_project_from_dir(proj_a, log_dir=tmp_path / "logs")
 
-    # A separate project that re-uses one of COLL_A's sample_names.
+    # A separate project that re-uses one of COLL_A's samples, listed
+    # with the same subject, visit and values as in the database.
     proj_b = tmp_path / "coll_b"
     proj_b.mkdir()
     (proj_b / "project.yaml").write_text(PROJECT_YAML.format(name="COLL_B"))
     (proj_b / "subjects.csv").write_text(
-        "subject_code,sex\nS_X,F\n"
+        "subject_code,sex,origin\nS_A,F,PL\n"
     )
     (proj_b / "visits.csv").write_text(
-        "subject_code,timepoint,group_test,age\nS_X,t0,ctrl,20\n"
+        "subject_code,timepoint,group_test,age\nS_A,baseline,ctrl,30\n"
     )
     (proj_b / "samples.csv").write_text(
-        "sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library\n"
+        "sample_name,subject_code,timepoint,sample_type,ipr,iprp,sqr,sqrp,library,antibody_class\n"
         # CA_SA1 already lives in project COLL_A — sharing is allowed now.
-        "CA_SA1,S_X,t0,sample,01,01,Q,Q,libA\n"
+        "CA_SA1,S_A,baseline,sample,01,01,Q1,Q1,libA,IgG\n"
     )
     (proj_b / "files").mkdir()
     # Re-list CA_SA1's EXISTING file (same sample_name + same path). This
@@ -377,6 +379,19 @@ def test_missing_required_column(tmp_path, clean_db, fake_tier_roots):
     assert "missing required columns" in str(exc.value)
 
 
+def test_subject_meta_columns_are_refused(tmp_path, clean_db, fake_tier_roots):
+    """There is no subject-level metadata; the columns used to vanish silently."""
+    proj = _build_project(tmp_path, name="IMP_SUBJMETA", prefix="SM")
+    (proj / "subjects.csv").write_text(
+        "subject_code,sex,origin,meta_diagnosis\nS_A,F,PL,UC\nS_B,M,AT,CD\n"
+    )
+    with pytest.raises(ValueError) as exc:
+        import_project_from_dir(proj, log_dir=tmp_path / "logs")
+    assert "meta_diagnosis" in str(exc.value)
+    assert "visits.csv" in str(exc.value)
+    assert execute("SELECT COUNT(*) AS n FROM projects")[0]["n"] == 0
+
+
 def test_control_autolink_follows_the_ip_plate(tmp_path, clean_db, fake_tier_roots):
     """A control is linked to a project by shared IP plate, not run.
 
@@ -433,3 +448,46 @@ def test_control_autolink_follows_the_ip_plate(tmp_path, clean_db, fake_tier_roo
         ("study_home",),
     )
     assert [r["sample_name"] for r in linked] == ["R21P03_81_Mock_1_A_T_C2"]
+
+
+# --------------------------------------------------------------------------- #
+# The documented example
+# --------------------------------------------------------------------------- #
+
+DATA_PREPARATION_MD = Path(__file__).resolve().parents[1] / "docs" / "data-preparation.md"
+
+
+def _write_docs_example(root: Path) -> None:
+    """Write the "Complete dummy example" of data-preparation.md to *root*."""
+    text = DATA_PREPARATION_MD.read_text(encoding="utf-8")
+    example = text.split("## Complete dummy example", 1)[1]
+    blocks = re.findall(r"\*\*`([^`]+)`\*\*[^\n]*\n\n```(?:yaml)?\n(.*?)```", example, re.S)
+    assert {name for name, _ in blocks} == {
+        "project.yaml", "subjects.csv", "visits.csv", "samples.csv", "files/manifest.csv",
+    }
+    (root / "files").mkdir(parents=True)
+    for name, body in blocks:
+        (root / name).write_text(body, encoding="utf-8")
+
+
+def test_docs_dummy_example_imports(tmp_path, clean_db, monkeypatch):
+    """The example users are told to copy must import as documented."""
+    monkeypatch.setenv("NOXDB_WORK_ROOT", "/lisc/data/work")
+    proj = tmp_path / "IBD_Vienna"
+    _write_docs_example(proj)
+
+    report = import_project_from_dir(
+        proj, skip_disk_check=True, log_dir=tmp_path / "logs",
+    )
+
+    assert report.warnings == []
+    assert report.counts["samples"]["inserted"] == 21
+    controls = execute(
+        "SELECT sample_type, COUNT(*) AS n FROM samples "
+        "WHERE IPR = ? AND IPRP = ? AND sample_type <> 'sample' "
+        "GROUP BY sample_type ORDER BY sample_type",
+        ("25", "01"),
+    )
+    assert {r["sample_type"]: r["n"] for r in controls} == {
+        "NC": 4, "anchor": 4, "mockIP": 8,
+    }

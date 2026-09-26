@@ -152,6 +152,29 @@ def validate_plate_id(raw: str | None, *, field: str) -> tuple[str, str | None]:
     return canon, warning
 
 
+def check_no_subject_metadata(header: list[str], filename: str) -> None:
+    """Refuse ``meta_*`` columns in a subjects CSV.
+
+    There is no subject-level metadata table, so these columns used to be
+    dropped without a word. Subject-level facts (a diagnosis, a score)
+    belong in ``visits.csv``, which stores them per visit.
+
+    Args:
+        header: Column names from the CSV header row.
+        filename: File name to report in the error.
+
+    Raises:
+        ValueError: If any column starts with ``meta_``.
+    """
+    meta = [col for col in header if col.startswith(META_PREFIX)]
+    if meta:
+        raise ValueError(
+            f"{filename}: metadata columns {meta} are not accepted; noxDB "
+            "has no subject-level metadata. Move them to visits.csv, which "
+            "stores metadata per visit."
+        )
+
+
 def split_columns(
     header: list[str], required: tuple[str, ...], optional: tuple[str, ...],
 ) -> tuple[list[str], list[str]]:
