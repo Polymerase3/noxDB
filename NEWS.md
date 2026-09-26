@@ -10,6 +10,41 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-26
+
+### Added
+- **Sequencing barcodes** (`schema/007_sample_barcodes.sql`). `samples`
+  gains `i7_index`, `i7_index_id`, `i5_index` and `i5_index_id`: the index
+  sequences and the kit's names for them (e.g. `TAACTTGGTC` /
+  `IDT10_i7_1`), from the same run sheet as `SQR` / `SQRP`. All four are
+  nullable, and a case-sensitive CHECK allows only upper-case A/C/G/T/N in
+  the sequences. Run the migration on `ccr_metadata` before using this
+  release.
+- `samples.create` / `get_or_create` / `update` take the barcodes and
+  upper-case the sequences (`samples.canonical_index`). `samples.csv` (folder
+  and bulk import) takes them as optional columns; they are validated, and
+  a top-up is checked against stored barcodes like the other sample values.
+  `queries.samples_for_project`, `controls_for_project` and `list_inputs`
+  return them.
+- **`samples.set_sequencing`** sets `SQR` / `SQRP` and the barcodes of a
+  sample that already exists. Empty columns are filled in and equal ones
+  left alone; a different stored value is refused unless `overwrite=True`.
+  `samples.sequencing_changes` reports what a call would change without
+  writing.
+- **`noxdb.run_sheet`** reads the run sheet (`Overview_SQRs`, `All_SQRs`
+  export) by column name, matches its rows to samples by name and then by
+  IP plate and well (the matching `scripts/backfill_sequencing_coords.py`
+  used, now shared), and applies the result all or nothing.
+- **`scripts/apply_run_sheet.py`** does this from the command line. It only
+  reports unless given `--commit`, can write the planned changes to a CSV
+  (`--out`), limit itself to one project (`--project`) and replace
+  differing values (`--overwrite`). After migrating, run it on the full
+  sheet to fill in the barcodes of the existing samples.
+
+### Changed
+- An import warning about a sample's empty `SQR` / `SQRP` or barcodes now
+  says they can be set with `scripts/apply_run_sheet.py`.
+
 ## [0.13.0] - 2026-09-26
 
 ### Added

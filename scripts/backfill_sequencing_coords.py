@@ -33,13 +33,13 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
-import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from noxdb.connection import close_pool, execute, init_pool  # noqa: E402
+from noxdb.run_sheet import sheet_name, well_key  # noqa: E402
 from noxdb.samples import canonical_plate_id  # noqa: E402
 
 
@@ -47,28 +47,6 @@ from noxdb.samples import canonical_plate_id  # noqa: E402
 # names, data from row 3.
 _SHEET_HEADER_ROWS = 2
 _SHEET_DELIMITER = ";"
-
-# 'R08P01_81_Mock_1_A_T_C2' -> IP run 08, IP plate 01, well 81. The well
-# number is compared as an int so '1' and '01' are one well.
-_WELL_RE = re.compile(r"^R(\d+)P(\d+)_(\d+)_")
-
-
-def sheet_name(raw: str) -> str:
-    """Normalize a sheet SampleName to the database's spelling."""
-    name = raw.strip()
-    return name[len("Sample_"):] if name.startswith("Sample_") else name
-
-
-def well_key(name: str) -> tuple[str, str, int] | None:
-    """IP plate and well of a sample name, or None if it carries neither."""
-    m = _WELL_RE.match(sheet_name(name))
-    if m is None:
-        return None
-    return (
-        canonical_plate_id(m.group(1)),
-        canonical_plate_id(m.group(2)),
-        int(m.group(3)),
-    )
 
 
 def read_sheet(path: Path) -> tuple[dict[str, set], dict[tuple, set]]:

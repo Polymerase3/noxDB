@@ -13,10 +13,14 @@ from typing import Any
 
 # Reuse the single plate-id canonicalization chokepoint so the value the
 # importer validates is exactly what samples.create will store.
-from noxdb.samples import canonical_plate_id
+from noxdb.samples import canonical_index, canonical_plate_id
 
 # DB column width for the coordinate columns (all VARCHAR(10)).
 _PLATE_MAX_LEN = 10
+
+# DB column widths for the barcode columns (schema 007).
+_INDEX_MAX_LEN = 32
+_INDEX_ID_MAX_LEN = 50
 
 # Required + optional columns per CSV (excluding meta_* keys).
 SUBJECTS_REQUIRED = ("subject_code", "sex")
@@ -29,7 +33,9 @@ SAMPLES_REQUIRED = (
     "sample_name", "subject_code", "timepoint",
     "sample_type", "ipr", "iprp", "sqr", "sqrp", "library",
 )
-SAMPLES_OPTIONAL = ("antibody_class",)
+# Sequencing barcodes, from the run sheet (schema 007).
+BARCODE_COLUMNS = ("i7_index", "i7_index_id", "i5_index", "i5_index_id")
+SAMPLES_OPTIONAL = ("antibody_class",) + BARCODE_COLUMNS
 
 MANIFEST_REQUIRED = ("sample_name", "file_path", "file_type")
 MANIFEST_OPTIONAL = ("storage_tier", "checksum_md5")
@@ -150,6 +156,36 @@ def validate_plate_id(raw: str | None, *, field: str) -> tuple[str, str | None]:
     if canon != (raw or "").strip():
         warning = f"{field}: {raw!r} normalized to {canon!r}"
     return canon, warning
+
+
+def barcode_errors(values: dict[str, str | None], *, where: str) -> list[str]:
+    """Problems with a samples row's barcode cells.
+
+    Args:
+        values: The row's ``BARCODE_COLUMNS`` cells, ``None`` when empty.
+        where: Location to prefix each message with, e.g.
+            ``"samples.csv row 4"``.
+
+    Returns:
+        One message per index sequence with characters other than
+        A, C, G, T and N, and per value too long for its column.
+    """
+    errs: list[str] = []
+    for column in BARCODE_COLUMNS:
+        raw = values.get(column)
+        if raw is None:
+            continue
+        is_id = column.endswith("_id")
+        if not is_id:
+            try:
+                canonical_index(raw)
+            except ValueError as exc:
+                errs.append(f"{where}.{column}: {exc}")
+                continue
+        limit = _INDEX_ID_MAX_LEN if is_id else _INDEX_MAX_LEN
+        if len(raw.strip()) > limit:
+            errs.append(f"{where}.{column}: {raw!r} is longer than {limit} characters")
+    return errs
 
 
 def check_no_subject_metadata(header: list[str], filename: str) -> None:

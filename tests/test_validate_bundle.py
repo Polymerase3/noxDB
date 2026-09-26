@@ -38,11 +38,12 @@ def visit(code, timepoint="baseline", group="UC", age="30", meta=None, row=2):
 
 
 def sample(name, code, timepoint="baseline", sample_type="sample", ipr="01", iprp="01",
-           sqr="05", sqrp="02", library="libA", antibody_class="IgG", meta=None, row=2):
+           sqr="05", sqrp="02", library="libA", antibody_class="IgG", meta=None, row=2,
+           **barcodes):
     return SampleRow(sample_name=name, subject_code=code, timepoint=timepoint,
                      sample_type=sample_type, ipr=ipr, iprp=iprp, sqr=sqr, sqrp=sqrp,
                      library=library, antibody_class=antibody_class,
-                     metadata=dict(meta or {}), row_num=row)
+                     metadata=dict(meta or {}), row_num=row, **barcodes)
 
 
 def bundle(subjects=(), visits=(), samples=(), name="BASE") -> ProjectBundle:
@@ -213,9 +214,44 @@ def test_setting_sqr_on_an_existing_sample_is_a_warning(base_project):
     assert result.errors == []
     assert [w.split(": ", 1)[1] for w in result.warnings] == [
         "sample 'R01P01_02_B' exists without SQR; the import does not fill in SQR='05' "
-        "on existing rows",
+        "on existing rows; set it with scripts/apply_run_sheet.py",
         "sample 'R01P01_02_B' exists without SQRP; the import does not fill in SQRP='02' "
-        "on existing rows",
+        "on existing rows; set it with scripts/apply_run_sheet.py",
+    ]
+
+
+def test_barcodes_are_checked_like_sqr(base_project):
+    """No barcodes stored: filling them in warns. A stored one that differs is an error."""
+    fill = check(bundle(subjects=[SUBJ_A], visits=[VISIT_A],
+                        samples=[sample("R01P01_01_A", "S_A", meta={"well": "A01"},
+                                        i7_index="acgtacgtac", i7_index_id="IDT10_i7_1")]))
+    assert fill.errors == []
+    assert [w.split(" exists without ")[1].split(";")[0] for w in fill.warnings] == [
+        "i7_index", "i7_index_id",
+    ]
+    assert "i7_index='ACGTACGTAC'" in fill.warnings[0]
+
+    with transaction() as cur:
+        cur.execute("UPDATE samples SET i7_index = ? WHERE sample_name = ?",
+                    ("TTTTTTTTTT", "R01P01_01_A"))
+    differ = check(bundle(subjects=[SUBJ_A], visits=[VISIT_A],
+                          samples=[sample("R01P01_01_A", "S_A", meta={"well": "A01"},
+                                          i7_index="ACGTACGTAC")]))
+    assert differ.errors == [
+        "samples.csv row 2: sample 'R01P01_01_A' already exists with "
+        "i7_index='TTTTTTTTTT'; the bundle has 'ACGTACGTAC'",
+    ]
+
+
+def test_bad_barcodes_are_schema_errors():
+    b = bundle(subjects=[subj("S_1", "F")], visits=[visit("S_1")],
+               samples=[sample("N1", "S_1", i7_index="ACGT-ACGT", i5_index="A" * 33,
+                               i5_index_id="x" * 51)])
+    assert validate_bundle(b).errors == [
+        "samples.csv row 2.i7_index: index sequence 'ACGT-ACGT' may only contain "
+        "A, C, G, T and N",
+        f"samples.csv row 2.i5_index: {'A' * 33!r} is longer than 32 characters",
+        f"samples.csv row 2.i5_index_id: {'x' * 51!r} is longer than 50 characters",
     ]
 
 

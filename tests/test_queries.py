@@ -250,6 +250,7 @@ def test_samples_for_project_returns_all_samples(populated_project):
         "project_id", "subject_id", "subject_code", "visit_id",
         "timepoint", "sample_id", "sample_name", "sample_type",
         "IPR", "IPRP", "SQR", "SQRP", "library", "antibody_class",
+        "i7_index", "i7_index_id", "i5_index", "i5_index_id",
     }
 
 

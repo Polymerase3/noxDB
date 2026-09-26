@@ -124,6 +124,7 @@ def samples_for_project(
     Output columns: ``project_id``, ``subject_id``, ``subject_code``,
     ``visit_id``, ``timepoint``, ``sample_id``, ``sample_name``,
     ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``,
+    ``i7_index``, ``i7_index_id``, ``i5_index``, ``i5_index_id``,
     ``library``, ``antibody_class``.
 
     Args:
@@ -160,7 +161,9 @@ def samples_for_project(
         where.append("sm.sample_type NOT IN ('mockIP', 'anchor', 'NC')")
     cur.execute(
         "SELECT sm.sample_id, sm.visit_id, sm.sample_name, sm.sample_type, "
-        "sm.IPR, sm.IPRP, sm.SQR, sm.SQRP, sm.library, sm.antibody_class, "
+        "sm.IPR, sm.IPRP, sm.SQR, sm.SQRP, "
+        "sm.i7_index, sm.i7_index_id, sm.i5_index, sm.i5_index_id, "
+        "sm.library, sm.antibody_class, "
         "v.timepoint, sub.subject_id, sub.subject_code "
         "FROM project_samples ps "
         "JOIN samples sm   ON sm.sample_id   = ps.sample_id "
@@ -206,6 +209,10 @@ def samples_for_project(
             "IPRP": sr["IPRP"],
             "SQR": sr["SQR"],
             "SQRP": sr["SQRP"],
+            "i7_index": sr["i7_index"],
+            "i7_index_id": sr["i7_index_id"],
+            "i5_index": sr["i5_index"],
+            "i5_index_id": sr["i5_index_id"],
             "library": sr["library"],
             "antibody_class": sr["antibody_class"],
         }
@@ -343,8 +350,9 @@ def controls_for_project(
 
     Returns:
         A ``pandas.DataFrame`` with columns: ``sample_id``, ``sample_name``,
-        ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``, ``library``,
-        ``antibody_class``,
+        ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``,
+        ``i7_index``, ``i7_index_id``, ``i5_index``, ``i5_index_id``,
+        ``library``, ``antibody_class``,
         ``visit_id``, ``timepoint``, ``subject_id``, ``subject_code``,
         ``project_id`` (the queried project's id).
 
@@ -357,6 +365,7 @@ def controls_for_project(
     cur.execute(
         "SELECT s.sample_id, s.sample_name, s.sample_type, "
         "s.IPR, s.IPRP, s.SQR, s.SQRP, "
+        "s.i7_index, s.i7_index_id, s.i5_index, s.i5_index_id, "
         "s.library, s.antibody_class, "
         "v.visit_id, v.timepoint, "
         "sub.subject_id, sub.subject_code, ps.project_id "
@@ -379,8 +388,9 @@ def list_inputs(cur) -> "pd.DataFrame":
 
     Returns:
         A ``pandas.DataFrame`` with columns: ``sample_id``, ``sample_name``,
-        ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``, ``library``,
-        ``antibody_class``,
+        ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``,
+        ``i7_index``, ``i7_index_id``, ``i5_index``, ``i5_index_id``,
+        ``library``, ``antibody_class``,
         ``visit_id``, ``timepoint``, ``subject_id``, ``subject_code``,
         ``project_id``.
 
@@ -391,6 +401,7 @@ def list_inputs(cur) -> "pd.DataFrame":
     cur.execute(
         "SELECT s.sample_id, s.sample_name, s.sample_type, "
         "s.IPR, s.IPRP, s.SQR, s.SQRP, "
+        "s.i7_index, s.i7_index_id, s.i5_index, s.i5_index_id, "
         "s.library, s.antibody_class, "
         "v.visit_id, v.timepoint, "
         "sub.subject_id, sub.subject_code, ps.project_id "
