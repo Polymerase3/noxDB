@@ -131,8 +131,8 @@ wells, wells 81-96 being its controls. They come from columns N
 sheet, read by [`noxdb.ip_runs`][noxdb.ip_runs], and every caller of
 [`samples.create`][noxdb.samples.create] passes them explicitly. The
 `RxxPxx` at the start of `sample_name` is **not** a source: some
-plates' files were labelled with the wrong one, so for CORSA
-`R02P01_01_..` is stored as IP run `04`, plate `03`. Inputs carry a
+plates' files were labelled with the wrong one, so a sample whose
+files say `R02P01_01_..` can be stored as IP run `04`, plate `03`. Inputs carry a
 run and an empty plate.
 
 `SQR` / `SQRP` — **sequencing** run and the plate within it. These come

@@ -33,7 +33,7 @@ A short YAML file with three fields:
 ```yaml
 project_name: IBD_Vienna
 description: "UC (n=40), CD (n=30), HC (n=20) — serum samples collected at MUW"
-pi_name: "Dr. Hubner"
+pi_name: "Dr. Jane Doe"
 ```
 
 | Field | Required | Notes |
@@ -124,13 +124,13 @@ R25P01_89_NC_1_A_T_C2,R25P01_89_NC_1_A_T_C2,baseline,NC,12,03,A_T_C2,,
 
 !!! warning "Never read `ipr` or `sqr` off the sample name"
 
-    A sample name like `R14P02_77_FAU0001_..` starts with an IP run and
+    A sample name like `R25P01_01_IBD001_..` starts with an IP run and
     plate label, but that label was mistyped on some plates' files:
-    CORSA ran as IP run `04`, not the `R02` its files carry, and
-    PREDICTS P5/P6 are `R08P04`/`R08P05`, not the `R08P01`/`R08P02`
-    that PCa_Innsbruck also uses. Take `ipr` / `iprp` from columns N
-    and O of the "Overview of IP runs" sheet; its `Combined*` column
-    lists the old label each plate's files were named under.
+    one project ran as IP run `04`, not the `R02` its files carry, and
+    two other projects' plates were both labelled `R08P01`. Take
+    `ipr` / `iprp` from columns N and O of the "Overview of IP runs"
+    sheet; its `Combined*` column lists the old label each plate's
+    files were named under.
     [`noxdb.ip_runs`][noxdb.ip_runs] reads the sheet.
 
     The sequencing coordinates are a different system again: this
@@ -261,7 +261,7 @@ usually do.
 ```yaml
 project_name: IBD_Vienna
 description: "UC (n=40), CD (n=30), HC (n=20) serum samples — MUW cohort"
-pi_name: "Dr. Hubner"
+pi_name: "Dr. Jane Doe"
 ```
 
 **`subjects.csv`**

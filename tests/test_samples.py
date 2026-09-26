@@ -56,7 +56,7 @@ def test_create_stores_the_ip_coords_it_is_given(two_visits):
     v1, _ = two_visits
     with transaction() as cur:
         sid = samples.create(
-            cur, v1, "R02P01_01_CORSAp1_6308_A_T_C2", "sample",
+            cur, v1, "R02P01_01_DEMOp1_1002_A_T_C2", "sample",
             "07", "02", "libA", ipr="04", iprp="03",
         )
         row = samples.get(cur, sid)

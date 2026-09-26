@@ -105,6 +105,11 @@ pkill -f "L 3307:<host>:3306"
 
 ## 2. Listing all projects
 
+The outputs on this page are **invented example data** (a fictional
+`IBD_Vienna` project, the same one used in
+[Data preparation](data-preparation.md)). They show the shape of what each
+call returns, not what is in the database.
+
 ```python
 from noxdb import projects, transaction
 
@@ -112,21 +117,14 @@ with transaction() as cur:
     proj_list = projects.list_all(cur)
 ```
 
-| project_id | project_name       | description                                                              |
-|------------|--------------------|--------------------------------------------------------------------------|
-| 7          | ADMCI_NED          |                                                                          |
-| 10         | BAT_BATIOS_Kiefer  | BAT (n=62) + BATIOS (n=74), 136 serum samples                            |
-| 13         | BC-Engl            | bladder cancer: Cis (n=141), Carbo (n=47), RCE (n=126), ICI (n=79), … |
-| 19         | CRC_radiotherapy   | diff. timepoints, 320 samples                                            |
-| 25         | HCC_MUW            | 150 + 30 (TKI therapy) + 78 HCs + 48 TKI-treated                        |
-| …          | …                  | …                                                                        |
-| 58         | input              | Control samples (input DNA)                                              |
-| 82         | early_life         |                                                                          |
-| 85         | Michi_CART         |                                                                          |
-| …          | …                  | …                                                                        |
-| 127        | PREDICTS           | Ulcerative colitis+Crohns disease+HCs, NY/Arno, 2000 samples total       |
+| project_id | project_name | description                                                   |
+|------------|--------------|---------------------------------------------------------------|
+| 3          | input        | Control samples (input DNA)                                   |
+| 12         | IBD_Vienna   | UC (n=40), CD (n=30), HC (n=20) — serum samples collected at MUW |
+| 14         | RA_Example   | rheumatoid arthritis, baseline + month 6                      |
+| …          | …            | …                                                             |
 
-62 projects total — 61 study projects + the `input` umbrella project.
+One row per study project, plus the `input` umbrella project.
 The dedicated `mockIP` / `anchor` / `NC` projects were removed in
 migration `003`; those controls are now linked to the study projects
 that share their plate (see [§11](#11-plate-controls-for-a-project)).
@@ -139,32 +137,35 @@ that share their plate (see [§11](#11-plate-controls-for-a-project)).
 from noxdb import queries
 
 with transaction() as cur:
-    summary = queries.project_summary(cur, project_id=7)
+    summary = queries.project_summary(cur, project_id=12)
 ```
 
 ```json
 {
-  "project_id": 7,
-  "n_subjects": 179,
-  "n_visits": 179,
-  "n_samples": 179,
-  "n_files": 358,
+  "project_id": 12,
+  "n_subjects": 122,
+  "n_visits": 192,
+  "n_samples": 192,
+  "n_files": 960,
   "files_by_type": {
-    "counts": 179,
-    "zigp_norm": 179
+    "fastq_r1": 192,
+    "fastq_r2": 192,
+    "counts": 192,
+    "zigp_norm": 192,
+    "zigp_loose": 192
   },
-  "n_controls": 64,
+  "n_controls": 32,
   "controls_by_type": {
-    "mockIP": 32,
-    "anchor": 16,
-    "NC": 16
+    "mockIP": 16,
+    "anchor": 8,
+    "NC": 8
   }
 }
 ```
 
 `n_samples` counts **every** sample linked to the project via
-`project_samples`, controls included — here 115 study + 64 controls =
-179. `n_controls` / `controls_by_type` break out just the control
+`project_samples`, controls included — here 160 study + 32 controls =
+192. `n_controls` / `controls_by_type` break out just the control
 subset (matched onto the project's IP plates by IPR + IPRP at import /
 migration time).
 
@@ -175,49 +176,49 @@ migration time).
 The main query for pulling all samples belonging to a project. Real
 samples and their plate controls (mockIP, anchor, NC) are all project
 members via `project_samples`, returned in one flat `DataFrame`. The
-`project_id` column is always the queried project (`7` for every row,
+`project_id` column is always the queried project (`12` for every row,
 controls included) — tell rows apart by `sample_type`.
 
 ```python
 with transaction() as cur:
-    df = queries.samples_for_project(cur, project_id=7)
+    df = queries.samples_for_project(cur, project_id=12)
 ```
 
-| project_id | subject_id | subject_code                       | visit_id | timepoint | sample_id | sample_name                        | sample_type | IPR | IPRP | SQR | SQRP | library | antibody_class |
-|------------|------------|------------------------------------|----------|-----------|-----------|------------------------------------|-------------|-----|------|-----|------|---------|----------------|
-| 7          | 649        | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | 649      | baseline  | 649       | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | sample      | 14  | 02   | 07  | 02   | A_T_C2  | None           |
-| 7          | 655        | R19P04_14_MG0213_ADMCI_NED_A_T_C2  | 655      | baseline  | 655       | R19P04_14_MG0213_ADMCI_NED_A_T_C2  | sample      | 19  | 04   | 14  | 05   | A_T_C2  | None           |
-| …          | …          | …                                  | …        | …         | …         | …                                  | …           | …   | …    | …   | …    | …       | …              |
-| 7          | 14926      | R14P02_81_Mock_1_A_T_C2            | 15838    | baseline  | 15838     | R14P02_81_Mock_1_A_T_C2            | mockIP      | 14  | 02   | 07  | 02   | A_T_C2  | None           |
-| …          | …          | …                                  | …        | …         | …         | …                                  | …           | …   | …    | …   | …    | …       | …              |
+| project_id | subject_id | subject_code            | visit_id | timepoint | sample_id | sample_name                     | sample_type | IPR | IPRP | SQR | SQRP | library | antibody_class |
+|------------|------------|-------------------------|----------|-----------|-----------|---------------------------------|-------------|-----|------|-----|------|---------|----------------|
+| 12         | 1001       | IBD_VIE_001             | 2001     | baseline  | 3001      | R25P01_01_IBD001_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           |
+| 12         | 1001       | IBD_VIE_001             | 2002     | week12    | 3002      | R25P01_02_IBD002_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           |
+| …          | …          | …                       | …        | …         | …         | …                               | …           | …   | …    | …   | …    | …       | …              |
+| 12         | 1101       | R25P01_81_Mock_1_A_T_C2 | 2161     | baseline  | 3161      | R25P01_81_Mock_1_A_T_C2         | mockIP      | 25  | 01   | 12  | 03   | A_T_C2  | None           |
+| …          | …          | …                       | …        | …         | …         | …                               | …           | …   | …    | …   | …    | …       | …              |
 
 `IPR`/`IPRP` are the immunoprecipitation plate, from the "Overview of
 IP runs" sheet; on some plates they differ from the `RxxPxx` in the
 name. `SQR`/`SQRP` are the sequencing plate, which comes from the run
-sheet. They are different numbers for the same row, and the second row
-above shows a third pairing again. See
+sheet. They are different numbers for the same row (here IP plate 25/01,
+sequencing plate 12/03). See
 [Two coordinate systems](schema.md#two-coordinate-systems).
 
-179 rows total (115 `sample` + 32 `mockIP` + 16 `anchor` + 16 `NC`).
+192 rows total (160 `sample` + 16 `mockIP` + 8 `anchor` + 8 `NC`).
 
 ### Real samples only
 
 ```python
 with transaction() as cur:
-    df = queries.samples_for_project(cur, project_id=7, include_controls=False)
+    df = queries.samples_for_project(cur, project_id=12, include_controls=False)
 ```
 
-115 rows.
+160 rows.
 
 ### Filtering by file presence
 
 ```python
 with transaction() as cur:
-    df_with    = queries.samples_for_project(cur, project_id=7, has_files=True)
-    df_without = queries.samples_for_project(cur, project_id=7, has_files=False)
+    df_with    = queries.samples_for_project(cur, project_id=12, has_files=True)
+    df_without = queries.samples_for_project(cur, project_id=12, has_files=False)
 ```
 
-179 with files, 0 without (file filter applies to both real samples and controls).
+192 with files, 0 without (file filter applies to both real samples and controls).
 
 ---
 
@@ -227,20 +228,20 @@ with transaction() as cur:
 from noxdb import subjects
 
 with transaction() as cur:
-    subj_list = subjects.list_for_project(cur, project_id=7)
+    subj_list = subjects.list_for_project(cur, project_id=12)
 ```
 
 ```json
 {
-  "subject_id": 649,
-  "subject_code": "R14P02_77_FAU0001_ADMCI_NED_A_T_C2",
+  "subject_id": 1001,
+  "subject_code": "IBD_VIE_001",
   "sex": "F",
-  "origin": "Netherlands",
-  "created_at": "2026-05-14T12:27:07"
+  "origin": "Austria",
+  "created_at": "2026-01-15T10:00:00"
 }
 ```
 
-179 subjects. `subjects` no longer carries a `project_id` (dropped in
+122 subjects. `subjects` no longer carries a `project_id` (dropped in
 migration `003`); `list_for_project` now traverses
 `project_samples → samples → visits → subjects`, so every subject with
 a sample in the project — control subjects included — is returned.
@@ -251,17 +252,17 @@ a sample in the project — control subjects included — is returned.
 
 ```python
 with transaction() as cur:
-    cur.execute("SELECT * FROM visits WHERE subject_id = ? LIMIT 1", (649,))
+    cur.execute("SELECT * FROM visits WHERE subject_id = ? LIMIT 1", (1001,))
 ```
 
 ```json
 {
-  "visit_id": 649,
-  "subject_id": 649,
+  "visit_id": 2001,
+  "subject_id": 1001,
   "timepoint": "baseline",
-  "group_test": "Controls",
-  "age": 83,
-  "created_at": "2026-05-14T12:27:13"
+  "group_test": "UC",
+  "age": 34,
+  "created_at": "2026-01-15T10:00:01"
 }
 ```
 
@@ -273,22 +274,22 @@ with transaction() as cur:
 from noxdb import samples
 
 with transaction() as cur:
-    s = samples.get(cur, sample_id=649)
+    s = samples.get(cur, sample_id=3001)
 ```
 
 ```json
 {
-  "sample_id": 649,
-  "visit_id": 649,
-  "sample_name": "R14P02_77_FAU0001_ADMCI_NED_A_T_C2",
+  "sample_id": 3001,
+  "visit_id": 2001,
+  "sample_name": "R25P01_01_IBD001_IBD_VIE_A_T_C2",
   "sample_type": "sample",
-  "IPR": "14",
-  "IPRP": "02",
-  "SQR": "07",
-  "SQRP": "02",
+  "IPR": "25",
+  "IPRP": "01",
+  "SQR": "12",
+  "SQRP": "03",
   "library": "A_T_C2",
   "antibody_class": null,
-  "created_at": "2026-05-14T12:27:18"
+  "created_at": "2026-01-15T10:00:02"
 }
 ```
 
@@ -301,16 +302,15 @@ joined in. Includes controls by default.
 
 ```python
 with transaction() as cur:
-    dfm = queries.samples_with_metadata(cur, project_id=7)
+    dfm = queries.samples_with_metadata(cur, project_id=12)
 ```
 
-179 rows × 18 columns:
+192 rows × 17 columns:
 
 ```
 ['project_id', 'subject_id', 'subject_code', 'visit_id', 'timepoint',
  'sample_id', 'sample_name', 'sample_type', 'IPR', 'IPRP', 'SQR', 'SQRP',
- 'library', 'antibody_class', 'Ethnicity', 'Race', 'BMI',
- 'SPPB_high_or_low']
+ 'library', 'antibody_class', 'treatment', 'CRP', 'disease_activity']
 ```
 
 ---
@@ -323,16 +323,22 @@ study samples **and** controls, since both are project members via
 
 ```python
 with transaction() as cur:
-    dff = queries.files_for_project(cur, project_id=7)
+    dff = queries.files_for_project(cur, project_id=12)
 ```
 
-| file_id | sample_id | sample_name                        | subject_code                       | timepoint | file_type | file_path                                                                    | file_size_bytes | checksum_md5 | storage_tier | created_at          |
-|---------|-----------|------------------------------------|------------------------------------|-----------|-----------|------------------------------------------------------------------------------|-----------------|--------------|--------------|---------------------|
-| 226     | 649       | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | baseline  | counts    | /lisc/data/work/ccr/mariaDB/counts/R14P02_77_FAU0001_ADMCI_NED_A_T_C2.count.gz      | None            | None         | work         | 2026-05-14 12:27:23 |
-| 229     | 649       | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | R14P02_77_FAU0001_ADMCI_NED_A_T_C2 | baseline  | zigp_norm | /lisc/data/work/ccr/mariaDB/zigp/R14P02_77_FAU0001_ADMCI_NED_A_T_C2.csv             | None            | None         | work         | 2026-05-14 12:27:24 |
-| …       | …         | …                                  | …                                  | …         | …         | …                                                                            | …               | …            | …            | …                   |
+| file_id | sample_id | sample_name                     | subject_code | timepoint | file_type | file_path                                                                            | archive_member                                     | archive_offset | file_size_bytes | checksum_md5                     | storage_tier | created_at          |
+|---------|-----------|---------------------------------|--------------|-----------|-----------|--------------------------------------------------------------------------------------|----------------------------------------------------|----------------|-----------------|----------------------------------|--------------|---------------------|
+| 5001    | 3001      | R25P01_01_IBD001_IBD_VIE_A_T_C2 | IBD_VIE_001  | baseline  | counts    | /lisc/data/work/ccr/mariaDB/counts/R25P01_01_IBD001_IBD_VIE_A_T_C2.count.gz           |                                                    | None           | None            | None                             | work         | 2026-01-15 10:00:03 |
+| 5002    | 3001      | R25P01_01_IBD001_IBD_VIE_A_T_C2 | IBD_VIE_001  | baseline  | zigp_norm | /lisc/data/work/ccr/mariaDB/zigp/R25P01_01_IBD001_IBD_VIE_A_T_C2.csv                  |                                                    | None           | None            | None                             | work         | 2026-01-15 10:00:03 |
+| 5004    | 3001      | R25P01_01_IBD001_IBD_VIE_A_T_C2 | IBD_VIE_001  | baseline  | fastq_r1  | /lisc/archive/ccr/mariaDB/fastq_tar/SQR12_fastq_files.tar                             | R25P01_01_IBD001_IBD_VIE_A_T_C2_R1.fastq.gz        | 512            | 148213760       | 0123456789abcdef0123456789abcdef | archive      | 2026-01-15 10:00:04 |
+| …       | …         | …                               | …            | …         | …         | …                                                                                    | …                                                  | …              | …               | …                                | …            | …                   |
 
-358 files total (179 `counts` + 179 `zigp_norm`).
+FASTQs are stored inside one tar per sequencing run: `file_path` is the
+tar, `archive_member` the file's name inside it and `archive_offset` the
+byte position of its data. Plain files have an empty `archive_member`.
+
+960 files total (192 each of `counts`, `zigp_norm`, `zigp_loose`,
+`fastq_r1` and `fastq_r2`).
 
 ---
 
@@ -345,10 +351,10 @@ analysis:
 
 ```python
 with transaction() as cur:
-    dft = queries.project_tidy_table(cur, project_id=7)
+    dft = queries.project_tidy_table(cur, project_id=12)
 ```
 
-Shape: 179 rows × 18 columns, the same set as §8.
+Shape: 192 rows × 17 columns, the same set as §8.
 
 ---
 
@@ -364,31 +370,31 @@ project.
 
 ```python
 with transaction() as cur:
-    dfc = queries.controls_for_project(cur, project_id=7)
+    dfc = queries.controls_for_project(cur, project_id=12)
 ```
 
 ```
 sample_type
-NC        16
-anchor    16
-mockIP    32
+NC         8
+anchor     8
+mockIP    16
 ```
 
 | sample_id | sample_name              | sample_type | IPR | IPRP | SQR | SQRP | library | project_id |
 |-----------|--------------------------|-------------|-----|------|-----|------|---------|------------|
-| 15838     | R14P02_81_Mock_1_A_T_C2  | mockIP      | 14  | 02   | 07  | 02   | A_T_C2  | 7          |
-| 15841     | R14P02_82_Mock_2_A_T_C2  | mockIP      | 14  | 02   | 07  | 02   | A_T_C2  | 7          |
+| 3161      | R25P01_81_Mock_1_A_T_C2  | mockIP      | 25  | 01   | 12  | 03   | A_T_C2  | 12         |
+| 3162      | R25P01_82_Mock_2_A_T_C2  | mockIP      | 25  | 01   | 12  | 03   | A_T_C2  | 12         |
 | …         | …                        | …           | …   | …    | …   | …    | …       | …          |
 
-64 controls total (32 `mockIP` + 16 `anchor` + 16 `NC`).
+32 controls total (16 `mockIP` + 8 `anchor` + 8 `NC`).
 
 ### Filtering by type
 
 ```python
 with transaction() as cur:
-    mocks   = queries.controls_for_project(cur, project_id=7, sample_types=["mockIP"])
-    anchors = queries.controls_for_project(cur, project_id=7, sample_types=["anchor"])
-    qc      = queries.controls_for_project(cur, project_id=7, sample_types=["anchor", "NC"])
+    mocks   = queries.controls_for_project(cur, project_id=12, sample_types=["mockIP"])
+    anchors = queries.controls_for_project(cur, project_id=12, sample_types=["anchor"])
+    qc      = queries.controls_for_project(cur, project_id=12, sample_types=["anchor", "NC"])
 ```
 
 ---
@@ -405,14 +411,12 @@ with transaction() as cur:
 
 | sample_id | sample_name         | sample_type | IPR | IPRP | SQR | SQRP | library | project_id |
 |-----------|---------------------|-------------|-----|------|-----|------|---------|------------|
-| 15640     | R02_input_01_A_T_C2 | input       | 02  |      | 02  |      | A_T_C2  | 58         |
-| 15643     | R02_input_02_A_T_C2 | input       | 02  |      | 02  |      | A_T_C2  | 58         |
+| 3901      | R25_input_01_A_T_C2 | input       | 25  |      | 12  |      | A_T_C2  | 3          |
+| 3902      | R25_input_02_A_T_C2 | input       | 25  |      | 12  |      | A_T_C2  | 3          |
 | …         | …                   | …           | …   | …    | …   | …    | …       | …          |
 
-152 input rows total, in four series: `R01_input` (8), `R02_input` (24),
-`R20_input` (24) and `R31_input` (96). The `R31` series has `counts` files
-only — no `zigp_norm` half exists for it — and the `R01` series (SQR01
-NextSeq pilot) has no files yet.
+One row per input library, all in the `input` umbrella project. Input
+series are named `R<IP run>_input_<nn>_<library>`.
 
 ---
 
@@ -430,7 +434,7 @@ In scripts, use a `try/finally` to guarantee cleanup even if a query fails:
 try:
     init_pool()
     with transaction() as cur:
-        df = queries.samples_for_project(cur, project_id=7)
+        df = queries.samples_for_project(cur, project_id=12)
 finally:
     close_pool()
 ```
@@ -452,9 +456,9 @@ from noxdb import projects, queries
 try:
     init_pool()
     with transaction() as cur:
-        project_row = projects.get(cur, project_id=7)
-        summary     = queries.project_summary(cur, project_id=7)
-        dff         = queries.files_for_project(cur, project_id=7)
+        project_row = projects.get(cur, project_id=12)
+        summary     = queries.project_summary(cur, project_id=12)
+        dff         = queries.files_for_project(cur, project_id=12)
 finally:
     close_pool()
 ```
@@ -463,46 +467,26 @@ finally:
 
 ```json
 {
-  "project_id": 7,
-  "project_name": "ADMCI_NED",
-  "description": null,
-  "pi_name": "Arno Bourgonje",
-  "created_at": "2026-05-14T12:27:07"
+  "project_id": 12,
+  "project_name": "IBD_Vienna",
+  "description": "UC (n=40), CD (n=30), HC (n=20) — serum samples collected at MUW",
+  "pi_name": "Dr. Jane Doe",
+  "created_at": "2026-01-15T10:00:00"
 }
 ```
 
-`summary`:
+`summary`: the same dictionary as in [§3](#3-project-summary).
 
-```json
-{
-  "project_id": 7,
-  "n_subjects": 179,
-  "n_visits": 179,
-  "n_samples": 179,
-  "n_files": 358,
-  "files_by_type": {
-    "counts": 179,
-    "zigp_norm": 179
-  },
-  "n_controls": 64,
-  "controls_by_type": {
-    "mockIP": 32,
-    "anchor": 16,
-    "NC": 16
-  }
-}
-```
-
-`dff` — first 6 rows of 358:
+`dff` — first 6 rows of 960:
 
 ```
- file_id                        sample_name file_type                                                              file_path storage_tier
-     226 R14P02_77_FAU0001_ADMCI_NED_A_T_C2    counts /lisc/data/work/ccr/mariaDB/counts/R14P02_77_FAU0001_ADMCI_NED_A_T_C2.count.gz         work
-     229 R14P02_77_FAU0001_ADMCI_NED_A_T_C2 zigp_norm        /lisc/data/work/ccr/mariaDB/zigp/R14P02_77_FAU0001_ADMCI_NED_A_T_C2.csv         work
-     232 R14P02_74_FAU0002_ADMCI_NED_A_T_C2    counts /lisc/data/work/ccr/mariaDB/counts/R14P02_74_FAU0002_ADMCI_NED_A_T_C2.count.gz         work
-     235 R14P02_74_FAU0002_ADMCI_NED_A_T_C2 zigp_norm        /lisc/data/work/ccr/mariaDB/zigp/R14P02_74_FAU0002_ADMCI_NED_A_T_C2.csv         work
-     238  R19P04_14_MG0213_ADMCI_NED_A_T_C2    counts  /lisc/data/work/ccr/mariaDB/counts/R19P04_14_MG0213_ADMCI_NED_A_T_C2.count.gz         work
-     241  R19P04_14_MG0213_ADMCI_NED_A_T_C2 zigp_norm         /lisc/data/work/ccr/mariaDB/zigp/R19P04_14_MG0213_ADMCI_NED_A_T_C2.csv         work
+ file_id                      sample_name   file_type                                                                   file_path storage_tier
+    5001  R25P01_01_IBD001_IBD_VIE_A_T_C2      counts   /lisc/data/work/ccr/mariaDB/counts/R25P01_01_IBD001_IBD_VIE_A_T_C2.count.gz         work
+    5002  R25P01_01_IBD001_IBD_VIE_A_T_C2   zigp_norm          /lisc/data/work/ccr/mariaDB/zigp/R25P01_01_IBD001_IBD_VIE_A_T_C2.csv         work
+    5003  R25P01_01_IBD001_IBD_VIE_A_T_C2  zigp_loose /lisc/data/work/ccr/mariaDB/zigp_loose_cutoff/R25P01_01_IBD001_IBD_VIE_A_T_C2.csv.gz  work
+    5004  R25P01_01_IBD001_IBD_VIE_A_T_C2    fastq_r1                     /lisc/archive/ccr/mariaDB/fastq_tar/SQR12_fastq_files.tar      archive
+    5005  R25P01_01_IBD001_IBD_VIE_A_T_C2    fastq_r2                     /lisc/archive/ccr/mariaDB/fastq_tar/SQR12_fastq_files.tar      archive
+    5006  R25P01_02_IBD002_IBD_VIE_A_T_C2      counts   /lisc/data/work/ccr/mariaDB/counts/R25P01_02_IBD002_IBD_VIE_A_T_C2.count.gz         work
 ```
 
 ### Exporting to a local folder
@@ -520,8 +504,8 @@ try:
     with transaction() as cur:
         result = fetch.export_project(
             cur,
-            project_id=7,
-            output_dir="exports/ADMCI_NED",
+            project_id=12,
+            output_dir="exports/IBD_Vienna",
             include_files=False,          # set True on LiSC to also pull files
             metadata_formats=("csv",),
         )
@@ -532,40 +516,43 @@ finally:
 Output directory layout:
 
 ```
-exports/ADMCI_NED/
-├── README.txt     (209 bytes)
-└── metadata.csv   (25,712 bytes)
+exports/IBD_Vienna/
+├── README.txt     (a few hundred bytes)
+└── metadata.csv   (one row per sample)
 ```
 
 `README.txt`:
 
 ```
-Project: ADMCI_NED (id=7)
-PI: Arno Bourgonje
-Description: -
-Created: 2026-05-14 12:27:07
+Project: IBD_Vienna (id=12)
+PI: Dr. Jane Doe
+Description: UC (n=40), CD (n=30), HC (n=20) — serum samples collected at MUW
+Created: 2026-01-15 10:00:00
 
 Counts:
-  subjects: 179
-  visits:   179
-  samples:  179
-  files:    358
+  subjects: 122
+  visits:   192
+  samples:  192
+  files:    960
 
 Files by type:
-  counts: 179
-  zigp_norm: 179
+  counts: 192
+  fastq_r1: 192
+  fastq_r2: 192
+  zigp_loose: 192
+  zigp_norm: 192
 ```
 
 `result` (the return value):
 
 ```json
 {
-  "project":  { "project_id": 7, "project_name": "ADMCI_NED", ... },
-  "summary":  { "n_subjects": 179, "n_files": 358, ... },
-  "metadata": { "csv": "exports/ADMCI_NED/metadata.csv" },
+  "project":  { "project_id": 12, "project_name": "IBD_Vienna", ... },
+  "summary":  { "n_subjects": 122, "n_files": 960, ... },
+  "metadata": { "csv": "exports/IBD_Vienna/metadata.csv" },
   "files":    { "downloaded": [], "skipped": [], "failed": [], "output_dir": null },
-  "readme":   "exports/ADMCI_NED/README.txt",
-  "output_dir": "exports/ADMCI_NED"
+  "readme":   "exports/IBD_Vienna/README.txt",
+  "output_dir": "exports/IBD_Vienna"
 }
 ```
 
@@ -575,8 +562,8 @@ connection through the SSH gateway):
 ```python
 result = fetch.export_project(
     cur,
-    project_id=7,
-    output_dir="exports/ADMCI_NED",
+    project_id=12,
+    output_dir="exports/IBD_Vienna",
     include_files=True,
     file_types=["counts"],        # omit to get all types
     layout="by_sample",           # or 'by_type' / 'flat'
