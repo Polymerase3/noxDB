@@ -10,6 +10,13 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-07
+
+### Changed
+- `docs/schema.md` explains `timepoint = 'baseline'`: it is the default for
+  projects without timepoint information and for plate controls, and means
+  "single sample, no timepoint known", not a confirmed baseline visit.
+
 ## [0.14.0] - 2026-09-26
 
 ### Added
