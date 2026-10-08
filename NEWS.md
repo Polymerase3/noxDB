@@ -10,12 +10,27 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
-## [0.14.1] - 2026-10-07
+## [0.14.3] - 2026-10-08
 
 ### Changed
 - `docs/schema.md` explains `timepoint = 'baseline'`: it is the default for
   projects without timepoint information and for plate controls, and means
   "single sample, no timepoint known", not a confirmed baseline visit.
+
+## [0.14.2] - 2026-10-08
+
+### Fixed
+- The connection test in the install docs called `init_pool().get_connection()`,
+  but `init_pool()` returns `None`. It now uses `execute()` and `close_pool()`.
+
+### Changed
+- The install docs recommend a mamba/conda environment from conda-forge
+  (`python`, `mariadb-connector-c`, `mariadb`), so nothing has to be compiled;
+  the system-library route is kept as a fallback. They name `mariadb.lisc` as
+  the database host, mention the LiSC firewall page as a way to get network
+  access, explain that `[noxdb-ssh]` is needed on a laptop for both the tunnel
+  and file downloads, and warn against setting `local_port` without your own
+  tunnel.
 
 ## [0.14.0] - 2026-09-26
 
