@@ -253,7 +253,7 @@ File pointers registered for a sample. The database never stores file content �
 |-------------------|-----------------------------------------------------------------------------------------|----------|------------------------------------------------------------|
 | `file_id`         | `BIGINT UNSIGNED` PK AI                                                                 | NO       |                                                            |
 | `sample_id`       | `BIGINT UNSIGNED` FK                                                                    | NO       | → `samples.sample_id` RESTRICT on delete                   |
-| `file_type`       | `ENUM('fastq_r1','fastq_r2','fastq_single','bam','counts','beer_norm','zigp_norm','edger_norm','zigp_loose')` | NO |                                                     |
+| `file_type`       | `ENUM('fastq_r1','fastq_r2','fastq_single','bam','counts','beer_norm','zigp_norm','edger_norm','zigp_loose','fastq_qc')` | NO |                                                     |
 | `file_path`       | `VARCHAR(1024)`                                                                         | NO       | Must be absolute (enforced by CHECK `LIKE '/%'`); the `.tar` for a tar member |
 | `archive_member`  | `VARCHAR(512)`                                                                          | NO       | DEFAULT `''`; the file's name inside the tar at `file_path`, `''` for a plain file. UNIQUE together with `file_path` |
 | `archive_offset`  | `BIGINT UNSIGNED`                                                                       | YES      | Byte position of the member's data in the tar; only set with `archive_member` (CHECK) |
@@ -273,6 +273,43 @@ row: `file_path` is the tar, `archive_member` the file's name inside it and
 can read one file without scanning the whole tar and checks it against
 `checksum_md5`. Register such rows with
 `files.register(..., archive_member=..., archive_offset=..., file_size_bytes=..., checksum_md5=...)`.
+
+### `sample_fastq_qc`
+
+The raw FASTQ quality control of a sample (migration `008_fastq_qc`), one
+row per sample. [noxqc](https://github.com/Polymerase3/noxqc) checks each
+sample's FASTQ pair and writes one JSON per sample, which is registered in
+[`sample_files`](#sample_files) as file type `fastq_qc` (tier `work`, under
+`<work root>/ccr/mariaDB/fastq_qc/json/`). The JSON holds everything; this
+table holds the headline numbers and the flags, so dashboards and queries
+can use them without reading files. Write it through
+[`fastq_qc.upsert`][noxdb.fastq_qc.upsert]; a re-run overwrites the row.
+
+| Column               | Type                                  | Nullable | Notes                                                      |
+|----------------------|---------------------------------------|----------|------------------------------------------------------------|
+| `sample_id`          | `BIGINT UNSIGNED` PK, FK              | NO       | → `samples.sample_id` CASCADE                              |
+| `qc_version`         | `VARCHAR(32)`                         | NO       | noxqc version that produced the row                        |
+| `qc_run_at`          | `DATETIME`                            | NO       | When the QC ran (UTC)                                      |
+| `reads_r1`, `reads_r2` | `BIGINT UNSIGNED`                   | YES      | Read counts of R1 and R2; NULL when the pair could not be read |
+| `pair_ok`            | `BOOLEAN`                             | NO       | MD5 matches, gzip intact, R1 = R2 read count, read IDs match |
+| `sequencing_run`     | `VARCHAR(100)`                        | YES      | `@instrument:run:flowcell` holding most of the reads       |
+| `n_lanes`, `lane_min_frac` | `TINYINT UNSIGNED`, `DECIMAL(6,5)` | YES    | Number of lanes; smallest lane's share of the reads (0–1)  |
+| `top_index`, `index_purity` | `VARCHAR(80)`, `DECIMAL(6,5)`  | YES      | Main index (`i7+i5`) of the reads and its share (0–1)      |
+| `barcode_match`      | `ENUM('match','mismatch','unknown')`  | NO       | Main index vs `samples.i7_index`/`i5_index` (i5 in either orientation); `unknown` without barcodes |
+| `q30_r1`, `q30_r2`   | `DECIMAL(7,3)`                        | YES      | % bases ≥ Q30                                               |
+| `avg_qual_r1`, `avg_qual_r2` | `DECIMAL(6,3)`                | YES      | Mean base quality                                           |
+| `gc_r1`, `gc_r2`     | `DECIMAL(7,3)`                        | YES      | % GC                                                        |
+| `dedup_r1`           | `DECIMAL(7,3)`                        | YES      | FastQC: % of R1 reads remaining after deduplication         |
+| `adapter_max`, `polyg_max`, `n_max` | `DECIMAL(9,5)`         | YES      | Highest % over R1 and R2 (adapter, poly-G, N at any position) |
+| `overrep_top_pct_r1` | `DECIMAL(9,5)`                        | YES      | % of R1 reads that are its most frequent sequence           |
+| `depth_rel`          | `DECIMAL(12,5)`                       | YES      | Reads / median of the Sample wells on the sequencing plate  |
+| `worst_flag`         | `ENUM('FAIL','WARN','INFO','OK')`     | NO       | Indexed                                                     |
+| `flags`              | `TEXT`                                | YES      | The sample's checks, e.g. `depth (WARN); index purity (WARN)` |
+| `created_at`         | `TIMESTAMP`                           | NO       | DEFAULT `CURRENT_TIMESTAMP`                                 |
+
+A CHECK keeps `index_purity` and `lane_min_frac` within 0–1. Deleting a
+sample deletes its QC row; [`fastq_qc.for_project`][noxdb.fastq_qc.for_project]
+lists a project's samples with their QC, keeping the unchecked ones.
 
 ---
 
@@ -342,7 +379,7 @@ or [`queries.project_tidy_table`][noxdb.queries.project_tidy_table].
 | `file_type`                          | Required tier         | Root env var          | Default         |
 |--------------------------------------|-----------------------|-----------------------|-----------------|
 | `fastq_r1`, `fastq_r2`, `fastq_single`, `bam` | `archive` | `NOXDB_ARCHIVE_ROOT`  | `/lisc/archive` |
-| `counts`, `beer_norm`, `zigp_norm`, `edger_norm`, `zigp_loose` | `work`  | `NOXDB_WORK_ROOT`     | `/lisc/work`    |
+| `counts`, `beer_norm`, `zigp_norm`, `edger_norm`, `zigp_loose`, `fastq_qc` | `work`  | `NOXDB_WORK_ROOT`     | `/lisc/work`    |
 | anything                             | `scratch`, `external` | —                     | —               |
 
 Flipping `archive` ↔ `work` on an existing row is rejected by
@@ -367,5 +404,6 @@ are still allowed for one-off cases.
 - `schema/002_controls_support.sql` — nullable `sex`/`age` for control rows; adds `NC` to `sample_type` ENUM.
 - `schema/003_cross_project_samples.sql` — adds the `project_samples` junction; drops `subjects.project_id` (global UNIQUE on `subject_code`); canonicalizes `SQR`/`SQRP`; backfills study/input/control membership; deletes the `mockIP`/`anchor`/`NC` projects.
 - `schema/004_ip_and_sequencing_coords.sql` — adds `IPR`/`IPRP`; moves the existing (IP) values into them so `SQR`/`SQRP` can be backfilled with the real sequencing coordinates by `scripts/backfill_sequencing_coords.py`.
+- `schema/008_fastq_qc.sql` — adds the `fastq_qc` file type and the `sample_fastq_qc` table.
 - `users/users.sql` — role and privilege definitions (the matching `users_with_passwords.sql` is gitignored).
 - `seed/load_fake_data.py` — fake-data seed covering all four EAV value types and a longitudinal subject example.

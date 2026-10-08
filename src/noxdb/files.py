@@ -13,7 +13,7 @@ File-type → tier is fixed by lab convention:
 
     fastq_r1 / fastq_r2 / fastq_single / bam           -> archive
     counts / beer_norm / zigp_norm / edger_norm /
-    zigp_loose                                         -> work
+    zigp_loose / fastq_qc                              -> work
 
 Roots are configurable via env vars (defaults shown):
 
@@ -43,7 +43,7 @@ from typing import Any
 import mariadb
 
 _ARCHIVE_TYPES = frozenset({"fastq_r1", "fastq_r2", "fastq_single", "bam"})
-_WORK_TYPES = frozenset({"counts", "beer_norm", "zigp_norm", "edger_norm", "zigp_loose"})
+_WORK_TYPES = frozenset({"counts", "beer_norm", "zigp_norm", "edger_norm", "zigp_loose", "fastq_qc"})
 _ALL_TYPES = _ARCHIVE_TYPES | _WORK_TYPES
 _ALL_TIERS = frozenset({"archive", "work", "scratch", "external"})
 

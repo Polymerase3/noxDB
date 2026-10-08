@@ -10,6 +10,21 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-08
+
+### Added
+- **Raw FASTQ QC** (`schema/008_fastq_qc.sql`). A new `sample_files`
+  file type `fastq_qc` (tier `work`) for each sample's QC JSON written by
+  noxqc, and a new table `sample_fastq_qc`, one row per sample: read counts,
+  `pair_ok` (MD5, gzip, R1/R2 counts and IDs), sequencing run, lanes, main
+  index and its purity, `barcode_match` against the run sheet, %Q30, mean
+  quality, GC, duplication, adapter / poly-G / N maxima, depth relative to
+  the plate, the worst flag and the list of flags. Run the migration on
+  `ccr_metadata` before using this release.
+- `noxdb.fastq_qc`: `upsert` (idempotent; returns `inserted` / `updated` /
+  `unchanged`), `get`, `delete` and `for_project` (a project's samples with
+  their QC, unchecked samples included).
+
 ## [0.14.2] - 2026-10-08
 
 ### Fixed
