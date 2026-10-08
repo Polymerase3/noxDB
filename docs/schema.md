@@ -95,6 +95,10 @@ One row per subject × timepoint / collection event. Time-varying clinical data 
 
 `age` was made nullable in migration `002_controls_support`.
 
+`timepoint = 'baseline'` is the default for projects without timepoint
+information and for plate controls: it means "single sample, no timepoint
+known", not a confirmed baseline visit.
+
 ---
 
 ### `samples`

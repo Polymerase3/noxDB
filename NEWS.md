@@ -25,6 +25,13 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
   `unchanged`), `get`, `delete` and `for_project` (a project's samples with
   their QC, unchecked samples included).
 
+## [0.14.3] - 2026-10-08
+
+### Changed
+- `docs/schema.md` explains `timepoint = 'baseline'`: it is the default for
+  projects without timepoint information and for plate controls, and means
+  "single sample, no timepoint known", not a confirmed baseline visit.
+
 ## [0.14.2] - 2026-10-08
 
 ### Fixed
