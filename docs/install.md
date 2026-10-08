@@ -4,52 +4,63 @@
 
 Before you start, make sure you have all of the following:
 
-- **Python 3.10 or newer** — check with `python --version` or `python3 --version`
-- **A MariaDB client library** installed on your system (see Step 1 below) — the Python driver needs it to build
-- **Access to the LiSC network** — either you are on-site, connected to the VPN, or you have SSH access to `ccr-lab.lisc.univie.ac.at`
+- **[Mamba](https://mamba.readthedocs.io) or conda** (e.g. via [Miniforge](https://github.com/conda-forge/miniforge)) — check with `mamba --version` or `conda --version`. This is the recommended way to get Python and the MariaDB driver; see [without conda](#without-conda) if you can't use it.
+- **Access to the LiSC network** — one of:
+    - you are on-site at LiSC or connected to the university VPN, or
+    - you have unlocked your current IP address on the [LiSC firewall page](https://lisc.univie.ac.at/firewall/) (access lasts 12 hours; no VPN needed).
+- **An SSH key for `ccr-lab.lisc.univie.ac.at`** — needed when you work from your own laptop (see Step 4).
 - **Git** — to clone the repository (`git --version` should return something)
 
 ---
 
-## Step 1 — Install the MariaDB client
+## Step 1 — Create the environment
 
-The Python `mariadb` driver is not pure Python — it compiles against your system's MariaDB client library. You need to install that library first, before installing the package.
+The Python `mariadb` driver is not pure Python: it needs the MariaDB C client library. Conda-forge ships both prebuilt, so nothing has to be compiled and the versions match. This works the same on Linux, macOS and Windows:
 
-=== "Linux (Debian / Ubuntu)"
+```bash
+mamba create -n noxdb -c conda-forge \
+    python=3.12 \
+    mariadb-connector-c \
+    mariadb
+mamba activate noxdb
+```
 
-    ```bash
-    sudo apt update
-    sudo apt install libmariadb-dev
-    ```
+(With conda, replace `mamba` by `conda`.) Activate the environment with `mamba activate noxdb` in every new terminal before you use noxdb.
 
-=== "Linux (Fedora / RHEL / Rocky)"
+??? note "Without conda"
 
-    ```bash
-    sudo dnf install mariadb-devel
-    ```
+    You need Python 3.10 or newer (`python3 --version`). Install the MariaDB client library from your system, then create a virtual environment: `python3 -m venv .venv && source .venv/bin/activate`. `pip install` in Step 2 then builds the driver against the library.
 
-=== "macOS"
+    === "Linux (Debian / Ubuntu)"
 
-    You need [Homebrew](https://brew.sh). If you don't have it, install it first (the Homebrew site has a one-liner).
+        ```bash
+        sudo apt update
+        sudo apt install libmariadb-dev
+        ```
 
-    ```bash
-    brew install mariadb-connector-c
-    ```
+    === "Linux (Fedora / RHEL / Rocky)"
 
-    After that, you may also need to tell the compiler where the library lives. Run:
+        ```bash
+        sudo dnf install mariadb-devel
+        ```
 
-    ```bash
-    export CFLAGS="-I$(brew --prefix mariadb-connector-c)/include"
-    export LDFLAGS="-L$(brew --prefix mariadb-connector-c)/lib"
-    ```
+    === "macOS"
 
-    Add those two lines to your `~/.zshrc` (or `~/.bash_profile`) if you want them to persist across terminal sessions.
+        You need [Homebrew](https://brew.sh).
 
-=== "Windows"
+        ```bash
+        brew install mariadb-connector-c
+        export CFLAGS="-I$(brew --prefix mariadb-connector-c)/include"
+        export LDFLAGS="-L$(brew --prefix mariadb-connector-c)/lib"
+        ```
 
-    1. Download the **MariaDB Connector/C** installer from the [official MariaDB downloads page](https://mariadb.com/downloads/connectors/).
-    2. Run the installer and follow the prompts. The default installation path is fine.
-    3. After installation, restart your terminal (or PowerShell) so the new paths are picked up.
+        Add the two `export` lines to your `~/.zshrc` (or `~/.bash_profile`) if you want them to persist across terminal sessions.
+
+    === "Windows"
+
+        1. Download the **MariaDB Connector/C** installer from the [official MariaDB downloads page](https://mariadb.com/downloads/connectors/).
+        2. Run the installer and follow the prompts. The default installation path is fine.
+        3. Restart your terminal (or PowerShell) so the new paths are picked up.
 
 ---
 
@@ -67,20 +78,13 @@ This creates a `noxdb/` folder. Go into it:
 cd noxdb
 ```
 
-**Install the package and its dependencies.** We install it in "editable" mode (`-e`) so that any local changes you make are picked up immediately without reinstalling:
-
-```bash
-pip install -e .
-```
-
-If you plan to do data analysis (pulling tables into pandas, SFTP fetches), install the `analysis` extras instead:
+**Install the package and its dependencies** into the active `noxdb` environment. We install it in "editable" mode (`-e`) so that any local changes you make are picked up immediately without reinstalling. The `analysis` extras add pandas and Excel support for pulling tables into data frames:
 
 ```bash
 pip install -e ".[analysis]"
 ```
 
-!!! tip
-    If you get a `pip: command not found` error, try `pip3` instead. If you want to keep things tidy, create a virtual environment first: `python3 -m venv .venv && source .venv/bin/activate`, then run the `pip install` command above.
+If you only need the core library, `pip install -e .` is enough.
 
 ---
 
@@ -98,11 +102,11 @@ nano ~/.my.cnf
 notepad $HOME\.my.cnf
 ```
 
-**Add the following block** (replace the placeholders with the values you received from an admin):
+**Add the following block** (replace the placeholders with the user name and password you received from an admin):
 
 ```ini
 [noxdb]
-host=<galera-internal-hostname>
+host=mariadb.lisc
 port=3306
 user=<your-db-username>
 password=<your-db-password>
@@ -113,7 +117,7 @@ What each field means:
 
 | Field      | What to put there                                                  |
 |------------|--------------------------------------------------------------------|
-| `host`     | The internal hostname of the database server — ask an admin        |
+| `host`     | Leave this as `mariadb.lisc` (the LiSC database server)            |
 | `port`     | Leave this as `3306` unless told otherwise                         |
 | `user`     | Your personal database username — provided by an admin             |
 | `password` | Your database password — provided by an admin                      |
@@ -128,9 +132,14 @@ chmod 600 ~/.my.cnf
 
 ---
 
-## Step 4 — Set up SSH tunnel credentials
+## Step 4 — Set up SSH credentials
 
-The database server lives on the LiSC internal network. If you are working from outside LiSC (e.g. from home), you cannot reach it directly. The library can automatically open an SSH tunnel through the lab's jump host (`ccr-lab.lisc.univie.ac.at`) — but you need to tell it how to log in there.
+When you work from your own computer, noxdb talks to LiSC through the lab's VM (`ccr-lab.lisc.univie.ac.at`) over SSH, for two things:
+
+- **Database queries** go through an SSH tunnel that noxdb opens for you.
+- **File downloads** (`download_files_for_project`, `export_project`) are copied over SFTP.
+
+You need [network access to LiSC](#requirements) for this, and you need to tell noxdb how to log in to the VM.
 
 **Add a second section** to the same `~/.my.cnf` file, directly below `[noxdb]`:
 
@@ -157,7 +166,10 @@ The tunnel is opened with the OpenSSH `ssh` command, which must log in **without
     `ssh_password=<your-lisc-password>` in `[noxdb-ssh]` is still accepted for file downloads (`download_files_for_project`, `export_project`), which use SFTP. It is ignored by the database tunnel.
 
 !!! note
-    If you are running your script directly on `ccr-lab` (i.e. you are already inside the LiSC network), you can skip this step entirely — the library will connect directly without an SSH tunnel when `ssh_host` is not set.
+    Only skip this section if you run your scripts directly on `ccr-lab` (or another LiSC machine with `/lisc` mounted). Without `ssh_host`, noxdb connects straight to `mariadb.lisc` and copies files from the local `/lisc` paths, which only exist there.
+
+!!! warning
+    Don't add `local_port` to `[noxdb-ssh]` unless you open an SSH tunnel yourself (see the [quickstart](quickstart.md)). When `local_port` is set and something is listening on that port, noxdb connects to it, even if it is not the tunnel.
 
 ---
 
@@ -166,32 +178,31 @@ The tunnel is opened with the OpenSSH `ssh` command, which must log in **without
 Copy the script below into a file called `test_connection.py` and run it with `python test_connection.py`.
 
 ```python
-from noxdb.connection import init_pool
+from noxdb.connection import execute, close_pool
 
 print("Connecting to the database...")
 try:
-    pool = init_pool()
-    conn = pool.get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 AS ok")
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
+    result = execute("SELECT 1 AS ok")
     print("Connection successful! Database responded:", result)
 except Exception as e:
     print("Connection failed:", e)
     print("\nThings to check:")
     print("  1. Is ~/.my.cnf present and does it have a [noxdb] section?")
     print("  2. Are your host / user / password correct?")
-    print("  3. If working remotely, does ~/.my.cnf have a [noxdb-ssh] section?")
-    print("  4. Can you SSH into ccr-lab.lisc.univie.ac.at manually?")
+    print("  3. Do you have LiSC access (on-site, VPN, or the firewall page)?")
+    print("  4. If working from your own computer, does ~/.my.cnf have a [noxdb-ssh] section?")
+    print("  5. Can you SSH into ccr-lab.lisc.univie.ac.at manually?")
+finally:
+    close_pool()
 ```
+
+`execute()` opens the connection on first use, and `close_pool()` closes it again (and the SSH tunnel, if one was opened). Call `close_pool()` at the end of every script.
 
 A successful run looks like this:
 
 ```
 Connecting to the database...
-Connection successful! Database responded: (1,)
+Connection successful! Database responded: [{'ok': 1}]
 ```
 
 If it fails, the error message and the checklist printed at the end are your first debugging steps.
