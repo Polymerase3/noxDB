@@ -98,6 +98,7 @@ nav:
       - run_sheet: reference/run_sheet.md
       - metadata: reference/metadata.md
       - files: reference/files.md
+      - fastq_qc: reference/fastq_qc.md
       - queries: reference/queries.md
       - workflows: reference/workflows.md
       - fetch: reference/fetch.md

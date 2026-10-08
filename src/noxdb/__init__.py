@@ -1,6 +1,7 @@
 """Python tooling for ccr_metadata."""
 
 from noxdb import (
+    fastq_qc,
     fetch,
     files,
     metadata,
@@ -22,6 +23,7 @@ from noxdb.connection import (
 __all__ = [
     "close_pool",
     "execute",
+    "fastq_qc",
     "fetch",
     "files",
     "get_connection",

@@ -16,6 +16,7 @@ Every page below is auto-generated from the docstrings in
 | [`run_sheet`](run_sheet.md)                  | SQR/SQRP and barcodes from the sequencing run sheet, for existing samples |
 | [`metadata`](metadata.md)                    | EAV wrapper for `visit_metadata` and `sample_metadata`                  |
 | [`files`](files.md)                          | Filesystem-validating registration for `sample_files`                   |
+| [`fastq_qc`](fastq_qc.md)                    | Raw FASTQ QC results per sample (`sample_fastq_qc`)                     |
 | [`queries`](queries.md)                      | Read-only joins, tidy tables, integrity checks                          |
 | [`workflows`](workflows.md)                  | Atomic multi-table operations on top of the per-table CRUD              |
 | [`fetch`](fetch.md)                          | Export project metadata + files to a local folder                       |

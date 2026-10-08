@@ -41,7 +41,7 @@ class TestExpectedTier:
         assert _expected_tier(ft) == "archive"
 
     @pytest.mark.parametrize(
-        "ft", ["counts", "beer_norm", "zigp_norm", "edger_norm", "zigp_loose"],
+        "ft", ["counts", "beer_norm", "zigp_norm", "edger_norm", "zigp_loose", "fastq_qc"],
     )
     def test_work_types(self, ft):
         assert _expected_tier(ft) == "work"
@@ -224,6 +224,18 @@ def _make_file(p, content: bytes = b"hello") -> str:
 # --------------------------------------------------------------------------- #
 # register: happy paths
 # --------------------------------------------------------------------------- #
+
+def test_register_fastq_qc_json_under_work(parent_ids, roots):
+    _, wrk = roots
+    path = _make_file(wrk / "ccr" / "mariaDB" / "fastq_qc" / "json" / "SMP1.fastq_qc.json", b"{}")
+    with transaction() as cur:
+        fid = files.register(cur, parent_ids, path, "fastq_qc", compute_md5=True)
+    with transaction() as cur:
+        row = files.get(cur, fid)
+    assert row["file_type"] == "fastq_qc"
+    assert row["storage_tier"] == "work"
+    assert row["checksum_md5"] == hashlib.md5(b"{}").hexdigest()
+
 
 def test_register_bam_under_archive(parent_ids, roots):
     arc, _ = roots
