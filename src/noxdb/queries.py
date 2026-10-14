@@ -125,7 +125,7 @@ def samples_for_project(
     ``visit_id``, ``timepoint``, ``sample_id``, ``sample_name``,
     ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``,
     ``i7_index``, ``i7_index_id``, ``i5_index``, ``i5_index_id``,
-    ``library``, ``antibody_class``.
+    ``library``, ``antibody_class``, ``manually_checked`` (``bool``).
 
     Args:
         cur: Audit-logging cursor from `transaction()`.
@@ -163,7 +163,7 @@ def samples_for_project(
         "SELECT sm.sample_id, sm.visit_id, sm.sample_name, sm.sample_type, "
         "sm.IPR, sm.IPRP, sm.SQR, sm.SQRP, "
         "sm.i7_index, sm.i7_index_id, sm.i5_index, sm.i5_index_id, "
-        "sm.library, sm.antibody_class, "
+        "sm.library, sm.antibody_class, sm.manually_checked, "
         "v.timepoint, sub.subject_id, sub.subject_code "
         "FROM project_samples ps "
         "JOIN samples sm   ON sm.sample_id   = ps.sample_id "
@@ -215,6 +215,7 @@ def samples_for_project(
             "i5_index_id": sr["i5_index_id"],
             "library": sr["library"],
             "antibody_class": sr["antibody_class"],
+            "manually_checked": bool(sr["manually_checked"]),
         }
         for sr in sample_rows
     ]

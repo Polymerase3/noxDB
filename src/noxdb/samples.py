@@ -51,6 +51,7 @@ _COLUMNS = (
     "i5_index_id",
     "library",
     "antibody_class",
+    "manually_checked",
     "created_at",
 )
 _ORDERABLE = frozenset(_COLUMNS)
@@ -394,6 +395,7 @@ def update(
     i7_index_id: str | None = None,
     i5_index: str | None = None,
     i5_index_id: str | None = None,
+    manually_checked: bool | None = None,
 ) -> bool:
     """Partial update of a sample row.
 
@@ -426,6 +428,8 @@ def update(
         i5_index: New i5 index sequence (if not None). Canonicalized
             like ``i7_index``.
         i5_index_id: New i5 index name (if not None).
+        manually_checked: Whether the sample's metadata has been
+            checked by hand (if not None).
 
     Returns:
         ``True`` iff exactly one row was updated.
@@ -447,6 +451,7 @@ def update(
         "i5_index_id": canonical_index_id(i5_index_id),
         "library": library,
         "antibody_class": antibody_class,
+        "manually_checked": manually_checked,
     }
     assignments = [(col, val) for col, val in fields.items() if val is not None]
     if not assignments:
