@@ -121,6 +121,7 @@ One row per physical sample / library / Ig-class measurement. `sample_name` is g
 | `i5_index_id`    | `VARCHAR(50)`                                                | YES      | The kit's name for the i5 index |
 | `library`        | `VARCHAR(50)`                                                | NO       |                                                |
 | `antibody_class` | `VARCHAR(50)`                                                | YES      |                                                |
+| `manually_checked` | `BOOLEAN`                                                  | NO       | DEFAULT `FALSE`; the sample's metadata has been checked by hand |
 | `created_at`     | `TIMESTAMP`                                                  | NO       | DEFAULT `CURRENT_TIMESTAMP`                    |
 
 `NC` was added to the `sample_type` ENUM in migration `002_controls_support`.
@@ -130,6 +131,11 @@ They come from the same run sheet as `SQR` / `SQRP`, and `NULL` means not
 known. [`samples.set_sequencing`][noxdb.samples.set_sequencing] and
 `scripts/apply_run_sheet.py` ([`noxdb.run_sheet`][noxdb.run_sheet]) set
 all six on samples that already exist.
+
+`manually_checked` was added in migration `009_manually_checked`. Every
+sample starts as `FALSE`; set it with
+[`samples.update`][noxdb.samples.update] once the sample's metadata has
+been checked by hand.
 
 #### Two coordinate systems
 
@@ -409,5 +415,6 @@ are still allowed for one-off cases.
 - `schema/003_cross_project_samples.sql` — adds the `project_samples` junction; drops `subjects.project_id` (global UNIQUE on `subject_code`); canonicalizes `SQR`/`SQRP`; backfills study/input/control membership; deletes the `mockIP`/`anchor`/`NC` projects.
 - `schema/004_ip_and_sequencing_coords.sql` — adds `IPR`/`IPRP`; moves the existing (IP) values into them so `SQR`/`SQRP` can be backfilled with the real sequencing coordinates by `scripts/backfill_sequencing_coords.py`.
 - `schema/008_fastq_qc.sql` — adds the `fastq_qc` file type and the `sample_fastq_qc` table.
+- `schema/009_manually_checked.sql` — adds `samples.manually_checked`.
 - `users/users.sql` — role and privilege definitions (the matching `users_with_passwords.sql` is gitignored).
 - `seed/load_fake_data.py` — fake-data seed covering all four EAV value types and a longitudinal subject example.

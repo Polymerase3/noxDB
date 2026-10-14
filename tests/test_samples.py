@@ -299,6 +299,17 @@ def test_update_partial_only_changes_provided_fields(two_visits):
     assert row["antibody_class"] == "IgG"
 
 
+def test_update_sets_manually_checked(two_visits):
+    v1, _ = two_visits
+    with transaction() as cur:
+        sid = samples.create(cur, v1, "U2", "sample", "SQR1", "SQRP1", "libA", ipr="01", iprp="01")
+        assert not samples.get(cur, sid)["manually_checked"]
+        samples.update(cur, sid, manually_checked=True)
+        assert samples.get(cur, sid)["manually_checked"]
+        samples.update(cur, sid, manually_checked=False)
+        assert not samples.get(cur, sid)["manually_checked"]
+
+
 def test_update_with_all_none_is_noop(two_visits):
     v1, _ = two_visits
     with transaction() as cur:

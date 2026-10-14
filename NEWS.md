@@ -10,6 +10,19 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-14
+
+### Added
+- **`samples.manually_checked`** (`schema/009_manually_checked.sql`), a
+  boolean that marks samples whose metadata has been checked by hand. Every
+  existing sample starts as `FALSE`. Run the migration on `ccr_metadata`
+  before using this release.
+- `samples.update` takes `manually_checked=True/False`, so the change goes
+  through the audit log.
+- `queries.samples_for_project` returns `manually_checked` as a `bool`, so it
+  is also in `samples_with_metadata`, `project_tidy_table` and the
+  `metadata.csv` / `metadata.xlsx` export.
+
 ## [0.15.0] - 2026-10-08
 
 ### Added

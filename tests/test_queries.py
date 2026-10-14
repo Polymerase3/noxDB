@@ -251,7 +251,9 @@ def test_samples_for_project_returns_all_samples(populated_project):
         "timepoint", "sample_id", "sample_name", "sample_type",
         "IPR", "IPRP", "SQR", "SQRP", "library", "antibody_class",
         "i7_index", "i7_index_id", "i5_index", "i5_index_id",
+        "manually_checked",
     }
+    assert df["manually_checked"].tolist() == [False] * 4
 
 
 def test_samples_for_project_filters_by_sample_type(populated_project):

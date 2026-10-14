@@ -184,13 +184,13 @@ with transaction() as cur:
     df = queries.samples_for_project(cur, project_id=12)
 ```
 
-| project_id | subject_id | subject_code            | visit_id | timepoint | sample_id | sample_name                     | sample_type | IPR | IPRP | SQR | SQRP | library | antibody_class |
-|------------|------------|-------------------------|----------|-----------|-----------|---------------------------------|-------------|-----|------|-----|------|---------|----------------|
-| 12         | 1001       | IBD_VIE_001             | 2001     | baseline  | 3001      | R25P01_01_IBD001_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           |
-| 12         | 1001       | IBD_VIE_001             | 2002     | week12    | 3002      | R25P01_02_IBD002_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           |
-| …          | …          | …                       | …        | …         | …         | …                               | …           | …   | …    | …   | …    | …       | …              |
-| 12         | 1101       | R25P01_81_Mock_1_A_T_C2 | 2161     | baseline  | 3161      | R25P01_81_Mock_1_A_T_C2         | mockIP      | 25  | 01   | 12  | 03   | A_T_C2  | None           |
-| …          | …          | …                       | …        | …         | …         | …                               | …           | …   | …    | …   | …    | …       | …              |
+| project_id | subject_id | subject_code            | visit_id | timepoint | sample_id | sample_name                     | sample_type | IPR | IPRP | SQR | SQRP | library | antibody_class | manually_checked |
+|------------|------------|-------------------------|----------|-----------|-----------|---------------------------------|-------------|-----|------|-----|------|---------|----------------|------------------|
+| 12         | 1001       | IBD_VIE_001             | 2001     | baseline  | 3001      | R25P01_01_IBD001_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           | True             |
+| 12         | 1001       | IBD_VIE_001             | 2002     | week12    | 3002      | R25P01_02_IBD002_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           | False            |
+| …          | …          | …                       | …        | …         | …         | …                               | …           | …   | …    | …   | …    | …       | …              | …                |
+| 12         | 1101       | R25P01_81_Mock_1_A_T_C2 | 2161     | baseline  | 3161      | R25P01_81_Mock_1_A_T_C2         | mockIP      | 25  | 01   | 12  | 03   | A_T_C2  | None           | False            |
+| …          | …          | …                       | …        | …         | …         | …                               | …           | …   | …    | …   | …    | …       | …              | …                |
 
 `IPR`/`IPRP` are the immunoprecipitation plate, from the "Overview of
 IP runs" sheet; on some plates they differ from the `RxxPxx` in the
@@ -289,6 +289,7 @@ with transaction() as cur:
   "SQRP": "03",
   "library": "A_T_C2",
   "antibody_class": null,
+  "manually_checked": 1,
   "created_at": "2026-01-15T10:00:02"
 }
 ```
@@ -305,12 +306,13 @@ with transaction() as cur:
     dfm = queries.samples_with_metadata(cur, project_id=12)
 ```
 
-192 rows × 17 columns:
+192 rows × 18 columns:
 
 ```
 ['project_id', 'subject_id', 'subject_code', 'visit_id', 'timepoint',
  'sample_id', 'sample_name', 'sample_type', 'IPR', 'IPRP', 'SQR', 'SQRP',
- 'library', 'antibody_class', 'treatment', 'CRP', 'disease_activity']
+ 'library', 'antibody_class', 'manually_checked', 'treatment', 'CRP',
+ 'disease_activity']
 ```
 
 ---
