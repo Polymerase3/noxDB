@@ -184,13 +184,17 @@ with transaction() as cur:
     df = queries.samples_for_project(cur, project_id=12)
 ```
 
-| project_id | subject_id | subject_code            | visit_id | timepoint | sample_id | sample_name                     | sample_type | IPR | IPRP | SQR | SQRP | library | antibody_class | manually_checked |
-|------------|------------|-------------------------|----------|-----------|-----------|---------------------------------|-------------|-----|------|-----|------|---------|----------------|------------------|
-| 12         | 1001       | IBD_VIE_001             | 2001     | baseline  | 3001      | R25P01_01_IBD001_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           | True             |
-| 12         | 1001       | IBD_VIE_001             | 2002     | week12    | 3002      | R25P01_02_IBD002_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           | False            |
-| …          | …          | …                       | …        | …         | …         | …                               | …           | …   | …    | …   | …    | …       | …              | …                |
-| 12         | 1101       | R25P01_81_Mock_1_A_T_C2 | 2161     | baseline  | 3161      | R25P01_81_Mock_1_A_T_C2         | mockIP      | 25  | 01   | 12  | 03   | A_T_C2  | None           | False            |
-| …          | …          | …                       | …        | …         | …         | …                               | …           | …   | …    | …   | …    | …       | …              | …                |
+| project_id | subject_id | subject_code            | sex  | origin  | visit_id | timepoint | group_test | age  | sample_id | sample_name                     | sample_type | IPR | IPRP | SQR | SQRP | library | antibody_class | manually_checked |
+|------------|------------|-------------------------|------|---------|----------|-----------|------------|------|-----------|---------------------------------|-------------|-----|------|-----|------|---------|----------------|------------------|
+| 12         | 1001       | IBD_VIE_001             | F    | Austria | 2001     | baseline  | CD         | 34   | 3001      | R25P01_01_IBD001_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           | True             |
+| 12         | 1001       | IBD_VIE_001             | F    | Austria | 2002     | week12    | CD         | 34   | 3002      | R25P01_02_IBD002_IBD_VIE_A_T_C2 | sample      | 25  | 01   | 12  | 03   | A_T_C2  | None           | False            |
+| …          | …          | …                       | …    | …       | …        | …         | …          | …    | …         | …                               | …           | …   | …    | …   | …    | …       | …              | …                |
+| 12         | 1101       | R25P01_81_Mock_1_A_T_C2 | None | None    | 2161     | baseline  | control    | None | 3161      | R25P01_81_Mock_1_A_T_C2         | mockIP      | 25  | 01   | 12  | 03   | A_T_C2  | None           | False            |
+| …          | …          | …                       | …    | …       | …        | …         | …          | …    | …         | …                               | …           | …   | …    | …   | …    | …       | …              | …                |
+
+`sex` and `origin` come from the subject, `group_test` and `age` from the
+visit. Controls have no donor, so their `sex`, `origin` and `age` are
+empty.
 
 `IPR`/`IPRP` are the immunoprecipitation plate, from the "Overview of
 IP runs" sheet; on some plates they differ from the `RxxPxx` in the
@@ -306,13 +310,13 @@ with transaction() as cur:
     dfm = queries.samples_with_metadata(cur, project_id=12)
 ```
 
-192 rows × 18 columns:
+192 rows × 22 columns:
 
 ```
-['project_id', 'subject_id', 'subject_code', 'visit_id', 'timepoint',
- 'sample_id', 'sample_name', 'sample_type', 'IPR', 'IPRP', 'SQR', 'SQRP',
- 'library', 'antibody_class', 'manually_checked', 'treatment', 'CRP',
- 'disease_activity']
+['project_id', 'subject_id', 'subject_code', 'sex', 'origin', 'visit_id',
+ 'timepoint', 'group_test', 'age', 'sample_id', 'sample_name',
+ 'sample_type', 'IPR', 'IPRP', 'SQR', 'SQRP', 'library', 'antibody_class',
+ 'manually_checked', 'treatment', 'CRP', 'disease_activity']
 ```
 
 ---
@@ -356,7 +360,7 @@ with transaction() as cur:
     dft = queries.project_tidy_table(cur, project_id=12)
 ```
 
-Shape: 192 rows × 17 columns, the same set as §8.
+Shape: 192 rows × 22 columns, the same set as §8.
 
 ---
 

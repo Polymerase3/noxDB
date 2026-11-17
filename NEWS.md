@@ -10,6 +10,14 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-15
+
+### Added
+- `queries.samples_for_project` returns the subject's `sex` and `origin` and
+  the visit's `group_test` and `age`, so `samples_with_metadata`,
+  `project_tidy_table` and the `metadata.csv` / `metadata.xlsx` export have
+  them too. Before, the export had none of these columns.
+
 ## [0.16.0] - 2026-10-14
 
 ### Added
