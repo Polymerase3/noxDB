@@ -122,7 +122,8 @@ def samples_for_project(
     ``project_id`` column is therefore always the queried project.
 
     Output columns: ``project_id``, ``subject_id``, ``subject_code``,
-    ``visit_id``, ``timepoint``, ``sample_id``, ``sample_name``,
+    ``sex``, ``origin``, ``visit_id``, ``timepoint``, ``group_test``,
+    ``age``, ``sample_id``, ``sample_name``,
     ``sample_type``, ``IPR``, ``IPRP``, ``SQR``, ``SQRP``,
     ``i7_index``, ``i7_index_id``, ``i5_index``, ``i5_index_id``,
     ``library``, ``antibody_class``, ``manually_checked`` (``bool``).
@@ -164,7 +165,8 @@ def samples_for_project(
         "sm.IPR, sm.IPRP, sm.SQR, sm.SQRP, "
         "sm.i7_index, sm.i7_index_id, sm.i5_index, sm.i5_index_id, "
         "sm.library, sm.antibody_class, sm.manually_checked, "
-        "v.timepoint, sub.subject_id, sub.subject_code "
+        "v.timepoint, v.group_test, v.age, "
+        "sub.subject_id, sub.subject_code, sub.sex, sub.origin "
         "FROM project_samples ps "
         "JOIN samples sm   ON sm.sample_id   = ps.sample_id "
         "JOIN visits v     ON v.visit_id     = sm.visit_id "
@@ -200,8 +202,12 @@ def samples_for_project(
             "project_id": project_id,
             "subject_id": sr["subject_id"],
             "subject_code": sr["subject_code"],
+            "sex": sr["sex"],
+            "origin": sr["origin"],
             "visit_id": sr["visit_id"],
             "timepoint": sr["timepoint"],
+            "group_test": sr["group_test"],
+            "age": sr["age"],
             "sample_id": sr["sample_id"],
             "sample_name": sr["sample_name"],
             "sample_type": sr["sample_type"],

@@ -251,9 +251,16 @@ def test_samples_for_project_returns_all_samples(populated_project):
         "timepoint", "sample_id", "sample_name", "sample_type",
         "IPR", "IPRP", "SQR", "SQRP", "library", "antibody_class",
         "i7_index", "i7_index_id", "i5_index", "i5_index_id",
-        "manually_checked",
+        "manually_checked", "sex", "origin", "group_test", "age",
     }
     assert df["manually_checked"].tolist() == [False] * 4
+    by_name = df.set_index("sample_name")
+    assert by_name.loc["SAMP_A3", ["sex", "origin", "group_test", "age"]].tolist() == [
+        "M", "PL", "ctrl", 31,
+    ]
+    assert by_name.loc["SAMP_B1", ["sex", "origin", "group_test", "age"]].tolist() == [
+        "F", "AT", "tx", 45,
+    ]
 
 
 def test_samples_for_project_filters_by_sample_type(populated_project):
