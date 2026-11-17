@@ -10,6 +10,18 @@ matching entry below; this is enforced by `.github/workflows/pr-checks.yml`.
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-17
+
+### Fixed
+- `connection._load_credentials` reads the config with
+  `ConfigParser(interpolation=None)`, so passwords containing `%` no longer
+  raise `InterpolationSyntaxError`.
+
+### Changed
+- CI runs on `ubuntu-24.04` instead of `ubuntu-latest`: the ubuntu-26.04
+  MariaDB 11.8 client requires TLS by default and cannot reach the
+  `mariadb:10.11` service container.
+
 ## [0.16.0] - 2026-10-14
 
 ### Added
