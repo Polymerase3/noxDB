@@ -146,7 +146,7 @@ def _load_credentials(config_path: Path, section: str) -> dict[str, Any]:
             f"Create it with a [{section}] section containing user/password."
         )
 
-    cfg = configparser.ConfigParser()
+    cfg = configparser.ConfigParser(interpolation=None) # CHANGE: before was configparser.ConfigParser()
     cfg.read(config_path)
 
     if section not in cfg:
